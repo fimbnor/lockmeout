@@ -1,3 +1,4 @@
 node_modules/
 .env
 locker.tar.gz
+secrets.md

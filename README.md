@@ -38,3 +38,5 @@ Open http://localhost:3000
 It gives you: server can't read your passwords, time lock enforced server-side, can't shorten or delete locked secrets through the API.
 
 It doesn't give you: protection against you the developer editing the database directly. That requires either tlock (drand timelock encryption) or moving the lock state to a chain/external service. Add that later if you need it.
+
+
