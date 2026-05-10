@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lockmeout</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Lockmeout</h1>
+    <div id="user-bar">
+      <span id="user-email"></span>
+      <button id="logout">Log in</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="auth-view">
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Log in</button>
+        <button class="tab" data-tab="signup">Sign up</button>
+      </div>
+
+      <form id="login-form" class="auth-form">
+        <label>Email <input type="email" name="email" required autocomplete="email" /></label>
+        <label>Master password <input type="password" name="password" required autocomplete="current-password" /></label>
+        <button type="submit">Log in</button>
+        <p class="msg" data-for="login"></p>
+      </form>
+
+      <form id="signup-form" class="auth-form" hidden>
+        <label>Email <input type="email" name="email" required autocomplete="email" /></label>
+        <label>Master password <input type="password" name="password" required minlength="10" autocomplete="new-password" /></label>
+        <p class="hint">Choose carefully. If you forget it, your secrets are unrecoverable.</p>
+        <button type="submit">Create account</button>
+        <p class="msg" data-for="signup"></p>
+      </form>
+    </section>
+
+    <section id="vault-view" hidden>
+      <form id="add-form">
+        <h2>Lock a new secret</h2>
+        <label>Label <input name="label" required maxlength="80" placeholder="e.g. wallet seed" /></label>
+        <label>Secret <textarea name="value" required rows="3"></textarea></label>
+        <label>Recovery email <input type="email" name="recoveryEmail" autocomplete="off" /></label>
+        <label>Recovery email password <input type="password" name="recoveryEmailPassword" autocomplete="off" /></label>
+        <label>Unlock at <input type="datetime-local" name="unlockAt" required /></label>
+        <button type="submit">Lock it</button>
+        <p class="msg" data-for="add"></p>
+      </form>
+
+      <h2>Your secrets</h2>
+      <ul id="secrets-list" class="empty"></ul>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
