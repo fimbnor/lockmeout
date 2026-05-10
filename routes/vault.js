@@ -7,9 +7,12 @@ router.use(auth);
 
 // store an encrypted secret with an unlock time
 router.post('/', async (req, res) => {
-  const { label, ciphertext, iv, unlockAt } = req.body || {};
-  if (!label || !ciphertext || !iv || !unlockAt) {
+  const { label, ciphertext, iv, drandRound, unlockAt } = req.body || {};
+  if (!label || !ciphertext || !unlockAt) {
     return res.status(400).json({ error: 'missing fields' });
+  }
+  if (!iv && !drandRound) {
+    return res.status(400).json({ error: 'need iv (legacy) or drandRound (tlock)' });
   }
   const unlockDate = new Date(unlockAt);
   if (isNaN(unlockDate.getTime())) return res.status(400).json({ error: 'bad unlockAt' });
@@ -17,7 +20,7 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'unlockAt must be in the future' });
   }
   const secret = await Secret.create({
-    userId: req.userId, label, ciphertext, iv, unlockAt: unlockDate,
+    userId: req.userId, label, ciphertext, iv, drandRound, unlockAt: unlockDate,
   });
   res.json({ ok: true, id: secret._id });
 });
@@ -47,7 +50,8 @@ router.get('/:id', async (req, res) => {
     });
   }
   res.json({
-    id: s._id, label: s.label, ciphertext: s.ciphertext, iv: s.iv, unlockAt: s.unlockAt,
+    id: s._id, label: s.label, ciphertext: s.ciphertext, iv: s.iv,
+    drandRound: s.drandRound, unlockAt: s.unlockAt,
   });
 });
 
@@ -58,6 +62,11 @@ router.patch('/:id/extend', async (req, res) => {
   if (isNaN(newDate.getTime())) return res.status(400).json({ error: 'bad unlockAt' });
   const s = await Secret.findOne({ _id: req.params.id, userId: req.userId });
   if (!s) return res.status(404).json({ error: 'not found' });
+  if (s.drandRound) {
+    return res.status(400).json({
+      error: 'cannot extend tlock-encrypted secret; reveal at unlock and re-create with later unlock time',
+    });
+  }
   if (newDate.getTime() <= s.unlockAt.getTime()) {
     return res.status(400).json({ error: 'new unlockAt must be later than current' });
   }
