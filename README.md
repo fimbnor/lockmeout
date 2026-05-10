@@ -17,9 +17,10 @@ Open http://localhost:3000
 
 - Master password never leaves your browser
 - Secrets are encrypted in the browser with a key derived from your master password (PBKDF2 → AES-GCM)
-- Server stores ciphertext + the unlock timestamp
-- Server refuses to return the ciphertext until `unlockAt <= now`
-- You can extend a lock but never shorten it
+- The AES-GCM ciphertext is then wrapped with [drand timelock encryption](https://drand.love/) targeting the unlock time's round
+- Server stores the wrapped ciphertext, the drand round number, and the unlock timestamp
+- Server refuses to return the ciphertext until `unlockAt <= now` (a UX gate; the cryptographic gate is the drand round)
+- You can't extend a tlock-encrypted secret server-side; reveal at unlock and re-create with a later unlock time
 - You can't delete a locked secret
 
 ## Endpoints
@@ -27,7 +28,7 @@ Open http://localhost:3000
 - `POST /api/auth/signup` — `{ email, salt, authHash }`
 - `POST /api/auth/salt` — `{ email }` → `{ salt }`
 - `POST /api/auth/login` — `{ email, authHash }` → `{ token }`
-- `POST /api/vault` — `{ label, ciphertext, iv, unlockAt }`
+- `POST /api/vault` — `{ label, ciphertext, drandRound, unlockAt }` (or legacy `{ ciphertext, iv, unlockAt }`)
 - `GET /api/vault` — list (metadata only)
 - `GET /api/vault/:id` — returns ciphertext if unlocked, 403 if not
 - `PATCH /api/vault/:id/extend` — `{ unlockAt }` (must be later)
@@ -35,8 +36,12 @@ Open http://localhost:3000
 
 ## What this gives you and what it doesn't
 
-It gives you: server can't read your passwords, time lock enforced server-side, can't shorten or delete locked secrets through the API.
+It gives you:
+- Server can't read your passwords (zero-knowledge: the AES key never leaves your browser).
+- Time lock is now cryptographic, not just a server check. Even with full database access and your master password, the outer ciphertext cannot be opened until the drand network publishes the signature for the unlock round. This protects against the developer/operator editing the DB to bypass the lock.
 
-It doesn't give you: protection against you the developer editing the database directly. That requires either tlock (drand timelock encryption) or moving the lock state to a chain/external service. Add that later if you need it.
+It doesn't give you:
+- Protection against a malicious server pushing modified client JS that exfiltrates your master password the next time you log in. Removing this requires distributing the client as a signed/reproducible artifact (browser extension or native app) instead of HTML served by this server.
+- Protection against drand being permanently down (locked items would never unlock). drand mainnet has run continuously since 2020 with multiple independent operators, but it is an external dependency.
 
 

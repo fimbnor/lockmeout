@@ -5,8 +5,10 @@
   "description": "Time-locked password vault",
   "main": "server.js",
   "scripts": {
+    "build": "esbuild src/app.js --bundle --format=esm --outfile=public/app.js",
+    "prestart": "npm run build",
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "npm run build && node --watch server.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -15,6 +17,10 @@
     "express": "^4.21.0",
     "express-rate-limit": "^7.4.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.7.0"
+    "mongoose": "^8.7.0",
+    "tlock-js": "^0.9.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
   }
 }

@@ -22,14 +22,14 @@
         <button class="tab" data-tab="signup">Sign up</button>
       </div>
 
-      <form id="login-form" class="auth-form">
+      <form id="login-form" class="auth-form" method="post" action="javascript:void(0)">
         <label>Email <input type="email" name="email" required autocomplete="email" /></label>
         <label>Master password <input type="password" name="password" required autocomplete="current-password" /></label>
         <button type="submit">Log in</button>
         <p class="msg" data-for="login"></p>
       </form>
 
-      <form id="signup-form" class="auth-form" hidden>
+      <form id="signup-form" class="auth-form" hidden method="post" action="javascript:void(0)">
         <label>Email <input type="email" name="email" required autocomplete="email" /></label>
         <label>Master password <input type="password" name="password" required minlength="10" autocomplete="new-password" /></label>
         <p class="hint">Choose carefully. If you forget it, your secrets are unrecoverable.</p>
@@ -39,7 +39,7 @@
     </section>
 
     <section id="vault-view" hidden>
-      <form id="add-form">
+      <form id="add-form" method="post" action="javascript:void(0)">
         <h2>Lock a new secret</h2>
         <label>Label <input name="label" required maxlength="80" placeholder="e.g. wallet seed" /></label>
         <label>Secret <textarea name="value" required rows="3"></textarea></label>
@@ -55,6 +55,6 @@
     </section>
   </main>
 
-  <script src="/app.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

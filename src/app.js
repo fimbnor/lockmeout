@@ -1,6 +1,12 @@
+import {
+  timelockEncrypt, timelockDecrypt, mainnetClient, roundAt, defaultChainInfo, Buffer,
+} from 'tlock-js';
+
 const PBKDF2_ITERS = 250_000;
+const DRAND_PERIOD_MS = defaultChainInfo.period * 1000;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+const drand = mainnetClient();
 
 const b64 = {
   encode(buf) {
@@ -31,19 +37,36 @@ async function deriveKeys(password, saltB64) {
   return { encKey, authHash: b64.encode(authHashRaw) };
 }
 
-async function encryptText(encKey, plaintext) {
+async function aesEncrypt(encKey, plaintext) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, encKey, enc.encode(plaintext));
   return { ciphertext: b64.encode(ct), iv: b64.encode(iv) };
 }
 
-async function decryptText(encKey, ciphertextB64, ivB64) {
+async function aesDecrypt(encKey, ciphertextB64, ivB64) {
   const pt = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: b64.decode(ivB64) },
     encKey,
     b64.decode(ciphertextB64)
   );
   return dec.decode(pt);
+}
+
+// Wrap: AES-GCM with master key, then tlock-encrypt the inner blob to the drand round at unlockAt.
+// Even with the master password and full DB access, the outer layer cannot be opened until
+// the drand network publishes the round signature.
+async function tlockWrap(encKey, plaintext, unlockAtMs) {
+  const inner = await aesEncrypt(encKey, plaintext);
+  const innerBundle = JSON.stringify(inner);
+  const round = roundAt(unlockAtMs, defaultChainInfo);
+  const outer = await timelockEncrypt(round, Buffer.from(innerBundle, 'utf8'), drand);
+  return { ciphertext: outer, drandRound: round };
+}
+
+async function tlockUnwrap(encKey, outerCiphertext) {
+  const innerBuf = await timelockDecrypt(outerCiphertext, drand);
+  const inner = JSON.parse(innerBuf.toString('utf8'));
+  return aesDecrypt(encKey, inner.ciphertext, inner.iv);
 }
 
 const session = {
@@ -165,9 +188,11 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
       recoveryEmail: e.target.recoveryEmail.value || null,
       recoveryEmailPassword: e.target.recoveryEmailPassword.value || null,
     });
-    const unlockAt = new Date(e.target.unlockAt.value).toISOString();
-    const { ciphertext, iv } = await encryptText(session.encKey, payload);
-    await api('/vault', { method: 'POST', body: JSON.stringify({ label, ciphertext, iv, unlockAt }) });
+    const unlockAtDate = new Date(e.target.unlockAt.value);
+    const unlockAt = unlockAtDate.toISOString();
+    setMsg('add', 'Sealing with drand timelock…');
+    const { ciphertext, drandRound } = await tlockWrap(session.encKey, payload, unlockAtDate.getTime());
+    await api('/vault', { method: 'POST', body: JSON.stringify({ label, ciphertext, drandRound, unlockAt }) });
     e.target.reset();
     setMsg('add', 'Locked.', 'ok');
     refreshSecrets();
@@ -252,7 +277,9 @@ function renderSecret(list, item) {
     revealBtn.disabled = true;
     try {
       const full = await api(`/vault/${item.id}`);
-      const plaintext = await decryptText(session.encKey, full.ciphertext, full.iv);
+      const plaintext = full.drandRound
+        ? await tlockUnwrap(session.encKey, full.ciphertext)
+        : await aesDecrypt(session.encKey, full.ciphertext, full.iv);
       let body = li.querySelector('.secret-body');
       if (!body) {
         body = document.createElement('div');
