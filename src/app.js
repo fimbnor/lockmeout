@@ -282,7 +282,7 @@ function renderSecret(list, item) {
   revealBtn.disabled = !item.accessible;
 
   const extendBtn = document.createElement('button');
-  extendBtn.textContent = item.accessMode === 'lock' ? 'Postpone' : 'Timelocked';
+  extendBtn.textContent = item.accessMode === 'lock' ? 'Postpone' : 'Sealed';
   extendBtn.disabled = !item.canRescheduleLater;
 
   const delBtn = document.createElement('button');
@@ -333,7 +333,7 @@ function renderSecret(list, item) {
     if (!input) return;
     try {
       const newDate = new Date(input).toISOString();
-      await api(`/vault/${item.id}/extend`, { method: 'PATCH', body: JSON.stringify({ unlockAt: newDate }) });
+      await api(`/vault/${item.id}/extend`, { method: 'PATCH', body: JSON.stringify({ scheduleAt: newDate }) });
       refreshSecrets();
     } catch (err) {
       alert(err.message);

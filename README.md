@@ -32,7 +32,7 @@ Open http://localhost:3000
 - `POST /api/vault` — either `{ label, ciphertext, drandRound, unlockAt }` / legacy `{ ciphertext, iv, unlockAt }`, or `{ label, ciphertext, iv, lockAt }`
 - `GET /api/vault` — list (metadata only)
 - `GET /api/vault/:id` — returns ciphertext if unlocked, 403 if not
-- `PATCH /api/vault/:id/extend` — `{ unlockAt }` (for lock-later items, reschedules the lock later)
+- `PATCH /api/vault/:id/extend` — `{ scheduleAt }` (legacy `{ unlockAt }` still accepted; for lock-later items this reschedules the lock later)
 - `DELETE /api/vault/:id` — unlock-later items only after unlock; lock-later items any time
 
 ## What this gives you and what it doesn't
@@ -44,4 +44,3 @@ It gives you:
 It doesn't give you:
 - Protection against a malicious server pushing modified client JS that exfiltrates your master password the next time you log in. Removing this requires distributing the client as a signed/reproducible artifact (browser extension or native app) instead of HTML served by this server.
 - Protection against drand being permanently down (locked items would never unlock). drand mainnet has run continuously since 2020 with multiple independent operators, but it is an external dependency.
-

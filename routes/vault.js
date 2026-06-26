@@ -31,7 +31,7 @@ router.post('/', async (req, res) => {
   if (hasUnlockAt && !iv && !drandRound) {
     return res.status(400).json({ error: 'need iv (legacy) or drandRound (tlock)' });
   }
-  if (hasLockAt && (!iv || drandRound)) {
+  if (hasLockAt && (!iv || drandRound != null)) {
     return res.status(400).json({ error: 'lockAt secrets must use AES-GCM ciphertext with an iv only' });
   }
   const scheduleField = hasLockAt ? 'lockAt' : 'unlockAt';
@@ -79,9 +79,7 @@ router.get('/:id', async (req, res) => {
       error: 'locked',
       unlockAt: s.unlockAt,
       lockAt: s.lockAt,
-      msRemaining: s.lockAt
-        ? 0
-        : s.unlockAt.getTime() - Date.now(),
+      msRemaining: s.unlockAt ? s.unlockAt.getTime() - Date.now() : null,
     });
   }
   res.json({
@@ -92,9 +90,9 @@ router.get('/:id', async (req, res) => {
 
 // postponing a future lock is allowed. tlock schedules must still be recreated.
 router.patch('/:id/extend', async (req, res) => {
-  const { unlockAt } = req.body || {};
-  const newDate = new Date(unlockAt);
-  if (isNaN(newDate.getTime())) return res.status(400).json({ error: 'bad unlockAt' });
+  const scheduleAt = req.body?.scheduleAt ?? req.body?.unlockAt;
+  const newDate = new Date(scheduleAt);
+  if (isNaN(newDate.getTime())) return res.status(400).json({ error: 'bad scheduleAt' });
   const s = await Secret.findOne({ _id: req.params.id, userId: req.userId });
   if (!s) return res.status(404).json({ error: 'not found' });
   if (s.lockAt) {
@@ -121,7 +119,7 @@ router.patch('/:id/extend', async (req, res) => {
   res.json({ ok: true, unlockAt: s.unlockAt });
 });
 
-// delete is only allowed if already unlocked. otherwise users would just delete to bypass.
+// unlock-later secrets cannot be deleted before they unlock. lock-later secrets may be deleted any time.
 router.delete('/:id', async (req, res) => {
   const s = await Secret.findOne({ _id: req.params.id, userId: req.userId });
   if (!s) return res.status(404).json({ error: 'not found' });
