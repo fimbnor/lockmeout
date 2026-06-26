@@ -5,22 +5,50 @@ const auth = require('../middleware/auth');
 const router = express.Router();
 router.use(auth);
 
-// store an encrypted secret with an unlock time
+function getAccessMode(secret) {
+  return secret.lockAt ? 'lock' : 'unlock';
+}
+
+function isAccessible(secret, now = Date.now()) {
+  if (secret.lockAt) return secret.lockAt.getTime() > now;
+  if (secret.unlockAt) return secret.unlockAt.getTime() <= now;
+  return true;
+}
+
+// store an encrypted secret with either a future unlock time or lock time
 router.post('/', async (req, res) => {
-  const { label, ciphertext, iv, drandRound, unlockAt } = req.body || {};
-  if (!label || !ciphertext || !unlockAt) {
+  const {
+    label, ciphertext, iv, drandRound, unlockAt, lockAt,
+  } = req.body || {};
+  if (!label || !ciphertext) {
     return res.status(400).json({ error: 'missing fields' });
   }
-  if (!iv && !drandRound) {
+  const hasUnlockAt = Boolean(unlockAt);
+  const hasLockAt = Boolean(lockAt);
+  if (hasUnlockAt === hasLockAt) {
+    return res.status(400).json({ error: 'provide exactly one of unlockAt or lockAt' });
+  }
+  if (hasUnlockAt && !iv && !drandRound) {
     return res.status(400).json({ error: 'need iv (legacy) or drandRound (tlock)' });
   }
-  const unlockDate = new Date(unlockAt);
-  if (isNaN(unlockDate.getTime())) return res.status(400).json({ error: 'bad unlockAt' });
-  if (unlockDate.getTime() <= Date.now()) {
-    return res.status(400).json({ error: 'unlockAt must be in the future' });
+  if (hasLockAt && (!iv || drandRound)) {
+    return res.status(400).json({ error: 'lockAt secrets must use AES-GCM ciphertext with an iv only' });
   }
+  const scheduleField = hasLockAt ? 'lockAt' : 'unlockAt';
+  const scheduleDate = new Date(hasLockAt ? lockAt : unlockAt);
+  if (isNaN(scheduleDate.getTime())) return res.status(400).json({ error: `bad ${scheduleField}` });
+  if (scheduleDate.getTime() <= Date.now()) {
+    return res.status(400).json({ error: `${scheduleField} must be in the future` });
+  }
+
   const secret = await Secret.create({
-    userId: req.userId, label, ciphertext, iv, drandRound, unlockAt: unlockDate,
+    userId: req.userId,
+    label,
+    ciphertext,
+    iv,
+    drandRound,
+    unlockAt: hasUnlockAt ? scheduleDate : undefined,
+    lockAt: hasLockAt ? scheduleDate : undefined,
   });
   res.json({ ok: true, id: secret._id });
 });
@@ -32,36 +60,54 @@ router.get('/', async (req, res) => {
   res.json(secrets.map(s => ({
     id: s._id,
     label: s.label,
+    accessMode: getAccessMode(s),
     unlockAt: s.unlockAt,
-    unlocked: s.unlockAt.getTime() <= now,
+    lockAt: s.lockAt,
+    scheduleAt: s.lockAt || s.unlockAt,
+    accessible: isAccessible(s, now),
     createdAt: s.createdAt,
+    canRescheduleLater: Boolean(s.lockAt) && s.lockAt.getTime() > now,
   })));
 });
 
-// retrieve a single secret. server enforces the time lock here.
+// retrieve a single secret. server enforces the schedule here.
 router.get('/:id', async (req, res) => {
   const s = await Secret.findOne({ _id: req.params.id, userId: req.userId });
   if (!s) return res.status(404).json({ error: 'not found' });
-  if (s.unlockAt.getTime() > Date.now()) {
+  if (!isAccessible(s)) {
     return res.status(403).json({
       error: 'locked',
       unlockAt: s.unlockAt,
-      msRemaining: s.unlockAt.getTime() - Date.now(),
+      lockAt: s.lockAt,
+      msRemaining: s.lockAt
+        ? 0
+        : s.unlockAt.getTime() - Date.now(),
     });
   }
   res.json({
     id: s._id, label: s.label, ciphertext: s.ciphertext, iv: s.iv,
-    drandRound: s.drandRound, unlockAt: s.unlockAt,
+    drandRound: s.drandRound, unlockAt: s.unlockAt, lockAt: s.lockAt,
   });
 });
 
-// extending the lock is allowed. shortening is NOT — that's the whole point.
+// postponing a future lock is allowed. tlock schedules must still be recreated.
 router.patch('/:id/extend', async (req, res) => {
   const { unlockAt } = req.body || {};
   const newDate = new Date(unlockAt);
   if (isNaN(newDate.getTime())) return res.status(400).json({ error: 'bad unlockAt' });
   const s = await Secret.findOne({ _id: req.params.id, userId: req.userId });
   if (!s) return res.status(404).json({ error: 'not found' });
+  if (s.lockAt) {
+    if (s.lockAt.getTime() <= Date.now()) {
+      return res.status(400).json({ error: 'cannot reschedule an already locked secret' });
+    }
+    if (newDate.getTime() <= s.lockAt.getTime()) {
+      return res.status(400).json({ error: 'new lock time must be later than current' });
+    }
+    s.lockAt = newDate;
+    await s.save();
+    return res.json({ ok: true, lockAt: s.lockAt });
+  }
   if (s.drandRound) {
     return res.status(400).json({
       error: 'cannot extend tlock-encrypted secret; reveal at unlock and re-create with later unlock time',
@@ -79,7 +125,7 @@ router.patch('/:id/extend', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const s = await Secret.findOne({ _id: req.params.id, userId: req.userId });
   if (!s) return res.status(404).json({ error: 'not found' });
-  if (s.unlockAt.getTime() > Date.now()) {
+  if (s.unlockAt && s.unlockAt.getTime() > Date.now()) {
     return res.status(403).json({ error: 'cannot delete locked secret' });
   }
   await s.deleteOne();

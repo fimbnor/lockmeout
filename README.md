@@ -1,6 +1,6 @@
 # Locker
 
-Time-locked password vault. You store a password, set an unlock time, and you can't read it back until that time has passed.
+Scheduled password vault. You can either lock a password immediately until a future unlock time, or keep it available until a future lock time.
 
 ## Setup
 
@@ -17,22 +17,23 @@ Open http://localhost:3000
 
 - Master password never leaves your browser
 - Secrets are encrypted in the browser with a key derived from your master password (PBKDF2 → AES-GCM)
-- The AES-GCM ciphertext is then wrapped with [drand timelock encryption](https://drand.love/) targeting the unlock time's round
-- Server stores the wrapped ciphertext, the drand round number, and the unlock timestamp
-- Server refuses to return the ciphertext until `unlockAt <= now` (a UX gate; the cryptographic gate is the drand round)
+- Unlock-later secrets are additionally wrapped with [drand timelock encryption](https://drand.love/) targeting the unlock time's round
+- Lock-later secrets stay as AES-GCM ciphertext and the server stops returning them after the scheduled lock time
+- Server stores the ciphertext plus either an unlock timestamp or a lock timestamp
+- Server refuses to return an unlock-later secret until `unlockAt <= now`, and refuses to return a lock-later secret once `lockAt <= now`
 - You can't extend a tlock-encrypted secret server-side; reveal at unlock and re-create with a later unlock time
-- You can't delete a locked secret
+- You can't delete an unlock-later secret before it unlocks
 
 ## Endpoints
 
 - `POST /api/auth/signup` — `{ email, salt, authHash }`
 - `POST /api/auth/salt` — `{ email }` → `{ salt }`
 - `POST /api/auth/login` — `{ email, authHash }` → `{ token }`
-- `POST /api/vault` — `{ label, ciphertext, drandRound, unlockAt }` (or legacy `{ ciphertext, iv, unlockAt }`)
+- `POST /api/vault` — either `{ label, ciphertext, drandRound, unlockAt }` / legacy `{ ciphertext, iv, unlockAt }`, or `{ label, ciphertext, iv, lockAt }`
 - `GET /api/vault` — list (metadata only)
 - `GET /api/vault/:id` — returns ciphertext if unlocked, 403 if not
-- `PATCH /api/vault/:id/extend` — `{ unlockAt }` (must be later)
-- `DELETE /api/vault/:id` — only if unlocked
+- `PATCH /api/vault/:id/extend` — `{ unlockAt }` (for lock-later items, reschedules the lock later)
+- `DELETE /api/vault/:id` — unlock-later items only after unlock; lock-later items any time
 
 ## What this gives you and what it doesn't
 
@@ -43,5 +44,4 @@ It gives you:
 It doesn't give you:
 - Protection against a malicious server pushing modified client JS that exfiltrates your master password the next time you log in. Removing this requires distributing the client as a signed/reproducible artifact (browser extension or native app) instead of HTML served by this server.
 - Protection against drand being permanently down (locked items would never unlock). drand mainnet has run continuously since 2020 with multiple independent operators, but it is an external dependency.
-
 

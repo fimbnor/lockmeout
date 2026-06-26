@@ -6,7 +6,8 @@ const SecretSchema = new mongoose.Schema({
   ciphertext: { type: String, required: true },
   iv: { type: String },
   drandRound: { type: Number },
-  unlockAt: { type: Date, required: true },
+  unlockAt: { type: Date },
+  lockAt: { type: Date },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Secret', SecretSchema);
