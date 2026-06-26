@@ -282,7 +282,7 @@ function renderSecret(list, item) {
   revealBtn.disabled = !item.accessible;
 
   const extendBtn = document.createElement('button');
-  extendBtn.textContent = item.accessMode === 'lock' ? 'Postpone' : 'Fixed';
+  extendBtn.textContent = item.accessMode === 'lock' ? 'Postpone' : 'Timelocked';
   extendBtn.disabled = !item.canRescheduleLater;
 
   const delBtn = document.createElement('button');
@@ -328,7 +328,7 @@ function renderSecret(list, item) {
 
   extendBtn.addEventListener('click', async () => {
     if (!item.canRescheduleLater) return;
-    const input = prompt('New lock date/time (ISO, must be later than current):',
+    const input = prompt(`New ${item.accessMode} date/time (ISO, must be later than current):`,
       new Date(new Date(item.scheduleAt).getTime() + 24 * 3600 * 1000).toISOString());
     if (!input) return;
     try {
@@ -350,9 +350,7 @@ function renderSecret(list, item) {
     }
   });
 
-  const msUntilStateChange = item.accessMode === 'lock'
-    ? new Date(item.scheduleAt).getTime() - Date.now()
-    : new Date(item.scheduleAt).getTime() - Date.now();
+  const msUntilStateChange = new Date(item.scheduleAt).getTime() - Date.now();
   if (msUntilStateChange > 0) {
     const tick = setInterval(() => {
       const scheduleAt = new Date(item.scheduleAt).getTime();
