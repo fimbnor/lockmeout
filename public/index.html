@@ -4,6 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Lockmeout</title>
+  <meta name="theme-color" content="#0f1115" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -45,7 +49,13 @@
         <label>Secret <textarea name="value" required rows="3"></textarea></label>
         <label>Recovery email <input type="email" name="recoveryEmail" autocomplete="off" /></label>
         <label>Recovery email password <input type="password" name="recoveryEmailPassword" autocomplete="off" /></label>
-        <label>Unlock at <input type="datetime-local" name="unlockAt" required /></label>
+        <fieldset class="schedule-options">
+          <legend>Schedule</legend>
+          <label class="choice"><input type="radio" name="scheduleMode" value="unlock" checked /> Lock now, unlock later</label>
+          <label class="choice"><input type="radio" name="scheduleMode" value="lock" /> Available now, lock later</label>
+        </fieldset>
+        <label><span id="schedule-at-label">Unlock at</span> <input type="datetime-local" name="scheduleAt" required /></label>
+        <p id="schedule-help" class="hint">This secret is sealed immediately and can only be revealed after the scheduled unlock time.</p>
         <button type="submit">Lock it</button>
         <p class="msg" data-for="add"></p>
       </form>

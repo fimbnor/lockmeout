@@ -182,18 +182,33 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
   btn.disabled = true;
   setMsg('add', 'Encrypting…');
   try {
+    const scheduleMode = e.target.scheduleMode.value;
     const label = e.target.label.value.trim();
     const payload = JSON.stringify({
       value: e.target.value.value,
       recoveryEmail: e.target.recoveryEmail.value || null,
       recoveryEmailPassword: e.target.recoveryEmailPassword.value || null,
     });
-    const unlockAtDate = new Date(e.target.unlockAt.value);
-    const unlockAt = unlockAtDate.toISOString();
-    setMsg('add', 'Sealing with drand timelock…');
-    const { ciphertext, drandRound } = await tlockWrap(session.encKey, payload, unlockAtDate.getTime());
-    await api('/vault', { method: 'POST', body: JSON.stringify({ label, ciphertext, drandRound, unlockAt }) });
+    const scheduleAtDate = new Date(e.target.scheduleAt.value);
+    if (Number.isNaN(scheduleAtDate.getTime())) throw new Error('Choose a valid date and time');
+    const scheduleAt = scheduleAtDate.toISOString();
+    let body;
+    if (scheduleMode === 'lock') {
+      const { ciphertext, iv } = await aesEncrypt(session.encKey, payload);
+      body = { label, ciphertext, iv, lockAt: scheduleAt };
+    } else {
+      setMsg('add', 'Sealing with drand timelock…');
+      const { ciphertext, drandRound } = await tlockWrap(session.encKey, payload, scheduleAtDate.getTime());
+      body = {
+        label,
+        ciphertext,
+        drandRound,
+        unlockAt: scheduleAt,
+      };
+    }
+    await api('/vault', { method: 'POST', body: JSON.stringify(body) });
     e.target.reset();
+    syncScheduleMode(e.target);
     setMsg('add', 'Locked.', 'ok');
     refreshSecrets();
   } catch (err) {
@@ -233,7 +248,7 @@ async function refreshSecrets() {
 
 function renderSecret(list, item) {
   const li = document.createElement('li');
-  li.className = `secret ${item.unlocked ? 'unlocked' : 'locked'}`;
+  li.className = `secret ${item.accessible ? 'accessible' : 'locked'}`;
   li.dataset.id = item.id;
 
   const head = document.createElement('div');
@@ -246,10 +261,15 @@ function renderSecret(list, item) {
   const meta = document.createElement('div');
   meta.className = 'secret-meta';
   const updateMeta = () => {
-    const remaining = new Date(item.unlockAt).getTime() - Date.now();
-    meta.textContent = remaining <= 0
-      ? `Unlocked since ${new Date(item.unlockAt).toLocaleString()}`
-      : `Unlocks in ${fmtRemaining(remaining)} (${new Date(item.unlockAt).toLocaleString()})`;
+    const scheduleAt = new Date(item.scheduleAt).getTime();
+    const remaining = scheduleAt - Date.now();
+    meta.textContent = item.accessMode === 'lock'
+      ? (remaining <= 0
+        ? `Locked since ${new Date(item.scheduleAt).toLocaleString()}`
+        : `Locks in ${fmtRemaining(remaining)} (${new Date(item.scheduleAt).toLocaleString()})`)
+      : (remaining <= 0
+        ? `Unlocked since ${new Date(item.scheduleAt).toLocaleString()}`
+        : `Unlocks in ${fmtRemaining(remaining)} (${new Date(item.scheduleAt).toLocaleString()})`);
   };
   updateMeta();
   labelWrap.append(labelEl, meta);
@@ -258,16 +278,17 @@ function renderSecret(list, item) {
   actions.className = 'secret-actions';
 
   const revealBtn = document.createElement('button');
-  revealBtn.textContent = item.unlocked ? 'Reveal' : 'Locked';
-  revealBtn.disabled = !item.unlocked;
+  revealBtn.textContent = item.accessible ? 'Reveal' : 'Locked';
+  revealBtn.disabled = !item.accessible;
 
   const extendBtn = document.createElement('button');
-  extendBtn.textContent = 'Extend';
+  extendBtn.textContent = item.accessMode === 'lock' ? 'Postpone' : 'Re-create';
+  extendBtn.disabled = !item.canRescheduleLater;
 
   const delBtn = document.createElement('button');
   delBtn.textContent = 'Delete';
   delBtn.className = 'danger';
-  delBtn.disabled = !item.unlocked;
+  delBtn.disabled = item.accessMode === 'unlock' && !item.accessible;
 
   actions.append(revealBtn, extendBtn, delBtn);
   head.append(labelWrap, actions);
@@ -277,9 +298,14 @@ function renderSecret(list, item) {
     revealBtn.disabled = true;
     try {
       const full = await api(`/vault/${item.id}`);
-      const plaintext = full.drandRound
-        ? await tlockUnwrap(session.encKey, full.ciphertext)
-        : await aesDecrypt(session.encKey, full.ciphertext, full.iv);
+      let plaintext;
+      if (full.lockAt) {
+        plaintext = await aesDecrypt(session.encKey, full.ciphertext, full.iv);
+      } else if (full.drandRound) {
+        plaintext = await tlockUnwrap(session.encKey, full.ciphertext);
+      } else {
+        plaintext = await aesDecrypt(session.encKey, full.ciphertext, full.iv);
+      }
       let body = li.querySelector('.secret-body');
       if (!body) {
         body = document.createElement('div');
@@ -304,12 +330,13 @@ function renderSecret(list, item) {
   });
 
   extendBtn.addEventListener('click', async () => {
-    const input = prompt('New unlock date/time (ISO, must be later than current):',
-      new Date(new Date(item.unlockAt).getTime() + 24 * 3600 * 1000).toISOString());
+    if (!item.canRescheduleLater) return;
+    const input = prompt(`New ${item.accessMode} date/time (ISO, must be later than the current scheduled time):`,
+      new Date(new Date(item.scheduleAt).getTime() + 24 * 3600 * 1000).toISOString());
     if (!input) return;
     try {
       const newDate = new Date(input).toISOString();
-      await api(`/vault/${item.id}/extend`, { method: 'PATCH', body: JSON.stringify({ unlockAt: newDate }) });
+      await api(`/vault/${item.id}/extend`, { method: 'PATCH', body: JSON.stringify({ scheduleAt: newDate }) });
       refreshSecrets();
     } catch (err) {
       alert(err.message);
@@ -326,9 +353,11 @@ function renderSecret(list, item) {
     }
   });
 
-  if (!item.unlocked) {
+  const scheduleAtMs = new Date(item.scheduleAt).getTime();
+  const msUntilStateChange = scheduleAtMs - Date.now();
+  if (msUntilStateChange > 0) {
     const tick = setInterval(() => {
-      const remaining = new Date(item.unlockAt).getTime() - Date.now();
+      const remaining = scheduleAtMs - Date.now();
       if (remaining <= 0) {
         clearInterval(tick);
         refreshSecrets();
@@ -341,6 +370,18 @@ function renderSecret(list, item) {
   list.append(li);
 }
 
+function syncScheduleMode(form = document.getElementById('add-form')) {
+  const mode = form.scheduleMode.value;
+  document.getElementById('schedule-at-label').textContent = mode === 'lock' ? 'Lock at' : 'Unlock at';
+  document.getElementById('schedule-help').textContent = mode === 'lock'
+    ? 'This secret stays revealable until the scheduled lock time, then the server will stop returning it.'
+    : 'This secret is sealed immediately and can only be revealed after the scheduled unlock time.';
+}
+
+document.querySelectorAll('#add-form input[name="scheduleMode"]').forEach(el => {
+  el.addEventListener('change', () => syncScheduleMode());
+});
+
 (function init() {
   session.load();
   if (session.token && session.encKey) {
@@ -350,7 +391,8 @@ function renderSecret(list, item) {
     show('auth');
   }
 
-  const dt = document.querySelector('#add-form input[name="unlockAt"]');
+  const dt = document.querySelector('#add-form input[name="scheduleAt"]');
   const min = new Date(Date.now() + 60_000);
   dt.min = new Date(min.getTime() - min.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  syncScheduleMode();
 })();
