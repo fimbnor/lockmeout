@@ -331,7 +331,7 @@ function renderSecret(list, item) {
 
   extendBtn.addEventListener('click', async () => {
     if (!item.canRescheduleLater) return;
-    const input = prompt(`New ${item.accessMode} date/time (ISO, must be later than current):`,
+    const input = prompt(`New ${item.accessMode} date/time (ISO, must be later than the current scheduled time):`,
       new Date(new Date(item.scheduleAt).getTime() + 24 * 3600 * 1000).toISOString());
     if (!input) return;
     try {
@@ -353,11 +353,11 @@ function renderSecret(list, item) {
     }
   });
 
-  const msUntilStateChange = new Date(item.scheduleAt).getTime() - Date.now();
+  const scheduleAtMs = new Date(item.scheduleAt).getTime();
+  const msUntilStateChange = scheduleAtMs - Date.now();
   if (msUntilStateChange > 0) {
     const tick = setInterval(() => {
-      const scheduleAt = new Date(item.scheduleAt).getTime();
-      const remaining = scheduleAt - Date.now();
+      const remaining = scheduleAtMs - Date.now();
       if (remaining <= 0) {
         clearInterval(tick);
         refreshSecrets();

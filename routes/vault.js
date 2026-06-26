@@ -23,7 +23,7 @@ router.post('/', async (req, res) => {
   if (!label || !ciphertext) {
     return res.status(400).json({ error: 'missing fields' });
   }
-  const hasDrandRound = Object.prototype.hasOwnProperty.call(req.body || {}, 'drandRound');
+  const hasDrandRound = drandRound !== undefined;
   const hasUnlockAt = Boolean(unlockAt);
   const hasLockAt = Boolean(lockAt);
   if (hasUnlockAt === hasLockAt) {
@@ -37,7 +37,7 @@ router.post('/', async (req, res) => {
   }
   const scheduleField = hasLockAt ? 'lockAt' : 'unlockAt';
   const scheduleDate = new Date(hasLockAt ? lockAt : unlockAt);
-  if (isNaN(scheduleDate.getTime())) return res.status(400).json({ error: `bad ${scheduleField}` });
+  if (Number.isNaN(scheduleDate.getTime())) return res.status(400).json({ error: `bad ${scheduleField}` });
   if (scheduleDate.getTime() <= Date.now()) {
     return res.status(400).json({ error: `${scheduleField} must be in the future` });
   }
@@ -93,12 +93,12 @@ router.get('/:id', async (req, res) => {
 router.patch('/:id/extend', async (req, res) => {
   const scheduleAt = req.body?.scheduleAt ?? req.body?.unlockAt;
   const newDate = new Date(scheduleAt);
-  if (isNaN(newDate.getTime())) return res.status(400).json({ error: 'bad scheduleAt' });
+  if (Number.isNaN(newDate.getTime())) return res.status(400).json({ error: 'bad scheduleAt' });
   const s = await Secret.findOne({ _id: req.params.id, userId: req.userId });
   if (!s) return res.status(404).json({ error: 'not found' });
   if (s.lockAt) {
     if (s.lockAt.getTime() <= Date.now()) {
-      return res.status(400).json({ error: 'cannot reschedule an already locked secret' });
+      return res.status(400).json({ error: 'cannot extend an already locked secret' });
     }
     if (newDate.getTime() <= s.lockAt.getTime()) {
       return res.status(400).json({ error: 'new lock time must be later than current' });
