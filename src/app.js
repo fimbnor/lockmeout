@@ -282,7 +282,7 @@ function renderSecret(list, item) {
   revealBtn.disabled = !item.accessible;
 
   const extendBtn = document.createElement('button');
-  extendBtn.textContent = item.accessMode === 'lock' ? 'Postpone' : 'Sealed';
+  extendBtn.textContent = item.accessMode === 'lock' ? 'Postpone' : 'Re-create';
   extendBtn.disabled = !item.canRescheduleLater;
 
   const delBtn = document.createElement('button');
@@ -298,11 +298,14 @@ function renderSecret(list, item) {
     revealBtn.disabled = true;
     try {
       const full = await api(`/vault/${item.id}`);
-      const plaintext = full.lockAt
-        ? await aesDecrypt(session.encKey, full.ciphertext, full.iv)
-        : full.drandRound
-        ? await tlockUnwrap(session.encKey, full.ciphertext)
-        : await aesDecrypt(session.encKey, full.ciphertext, full.iv);
+      let plaintext;
+      if (full.lockAt) {
+        plaintext = await aesDecrypt(session.encKey, full.ciphertext, full.iv);
+      } else if (full.drandRound) {
+        plaintext = await tlockUnwrap(session.encKey, full.ciphertext);
+      } else {
+        plaintext = await aesDecrypt(session.encKey, full.ciphertext, full.iv);
+      }
       let body = li.querySelector('.secret-body');
       if (!body) {
         body = document.createElement('div');

@@ -23,6 +23,7 @@ router.post('/', async (req, res) => {
   if (!label || !ciphertext) {
     return res.status(400).json({ error: 'missing fields' });
   }
+  const hasDrandRound = Object.prototype.hasOwnProperty.call(req.body || {}, 'drandRound');
   const hasUnlockAt = Boolean(unlockAt);
   const hasLockAt = Boolean(lockAt);
   if (hasUnlockAt === hasLockAt) {
@@ -31,7 +32,7 @@ router.post('/', async (req, res) => {
   if (hasUnlockAt && !iv && !drandRound) {
     return res.status(400).json({ error: 'need iv (legacy) or drandRound (tlock)' });
   }
-  if (hasLockAt && (!iv || drandRound != null)) {
+  if (hasLockAt && (!iv || hasDrandRound)) {
     return res.status(400).json({ error: 'lockAt secrets must use AES-GCM ciphertext with an iv only' });
   }
   const scheduleField = hasLockAt ? 'lockAt' : 'unlockAt';
