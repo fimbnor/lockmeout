@@ -91,13 +91,18 @@ router.post('/:id/relock', relockLimiter, async (req, res) => {
     return res.status(400).json({ error: 'unlockAt must be in the future' });
   }
   if (drandRound !== roundAt(unlockDate.getTime(), defaultChainInfo)) {
-    return res.status(400).json({ error: 'drandRound does not match unlockAt' });
+    return res.status(400).json({ error: 'invalid drand round for the specified unlock time' });
   }
 
   const existing = await Secret.findOne({ _id: req.params.id, userId: req.userId });
   if (!existing) return res.status(404).json({ error: 'not found' });
   if (!existing.unlockAt) return res.status(400).json({ error: 'only unlock-later secrets can be re-locked' });
-  if (!isAccessible(existing)) return res.status(403).json({ error: 'locked', unlockAt: existing.unlockAt });
+  if (!isAccessible(existing)) {
+    return res.status(403).json({
+      error: 'secret is currently locked and cannot be re-locked until it becomes accessible',
+      unlockAt: existing.unlockAt,
+    });
+  }
 
   const replacement = await Secret.create({
     userId: req.userId,
@@ -113,7 +118,9 @@ router.post('/:id/relock', relockLimiter, async (req, res) => {
     await replacement.deleteOne().catch((cleanupErr) => {
       console.error(`failed to clean up replacement secret ${replacement._id}:`, cleanupErr.message);
     });
-    return res.status(500).json({ error: 'could not replace original secret' });
+    return res.status(500).json({
+      error: 'failed to delete original secret; the re-locked version has been removed to maintain consistency',
+    });
   }
 
   res.json({ ok: true, id: replacement._id });

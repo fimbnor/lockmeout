@@ -341,7 +341,7 @@ function renderSecret(list, item) {
   extendBtn.addEventListener('click', async () => {
     if (item.accessMode === 'unlock') {
       if (!item.accessible) return;
-      if (!confirm(`Re-lock "${item.label}"? You will choose a new unlock time and the current unlocked copy will be replaced.`)) return;
+      if (!confirm(`Re-lock "${item.label}"? The current unlocked copy will be replaced with a new time-locked version.`)) return;
       const input = prompt('New unlock date/time (ISO 8601, e.g. YYYY-MM-DDTHH:mm:ss.SSSZ; must be in the future):', oneDayLaterIso(item.scheduleAt));
       if (!input) return;
       extendBtn.disabled = true;
