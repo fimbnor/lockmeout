@@ -194,8 +194,20 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
     const scheduleAt = scheduleAtDate.toISOString();
     let body;
     if (scheduleMode === 'lock') {
+      const lockAtDate = new Date(e.target.lockAt.value);
+      if (Number.isNaN(lockAtDate.getTime())) throw new Error('Choose a valid lock date and time');
+      if (lockAtDate.getTime() <= Date.now()) throw new Error('Lock time must be in the future');
+      if (scheduleAtDate.getTime() <= lockAtDate.getTime()) {
+        throw new Error('Unlock time must be later than lock time');
+      }
       const { ciphertext, iv } = await aesEncrypt(session.encKey, payload);
-      body = { label, ciphertext, iv, lockAt: scheduleAt };
+      body = {
+        label,
+        ciphertext,
+        iv,
+        lockAt: lockAtDate.toISOString(),
+        unlockAt: scheduleAt,
+      };
     } else {
       setMsg('add', 'Sealing with drand timelock…');
       const { ciphertext, drandRound } = await tlockWrap(session.encKey, payload, scheduleAtDate.getTime());
@@ -325,6 +337,19 @@ function renderSecret(list, item) {
   const meta = document.createElement('div');
   meta.className = 'secret-meta';
   const updateMeta = () => {
+    if (item.accessMode === 'lock' && item.unlockAt) {
+      const now = Date.now();
+      const lockAtMs = new Date(item.lockAt).getTime();
+      const unlockAtMs = new Date(item.unlockAt).getTime();
+      if (now < lockAtMs) {
+        meta.textContent = `Locks in ${fmtRemaining(lockAtMs - now)} (${new Date(item.lockAt).toLocaleString()})`;
+      } else if (now < unlockAtMs) {
+        meta.textContent = `Unlocks in ${fmtRemaining(unlockAtMs - now)} (${new Date(item.unlockAt).toLocaleString()})`;
+      } else {
+        meta.textContent = `Unlocked since ${new Date(item.unlockAt).toLocaleString()}`;
+      }
+      return;
+    }
     const scheduleAt = new Date(item.scheduleAt).getTime();
     const remaining = scheduleAt - Date.now();
     meta.textContent = item.accessMode === 'lock'
@@ -460,10 +485,41 @@ function renderSecret(list, item) {
 
 function syncScheduleMode(form = document.getElementById('add-form')) {
   const mode = form.scheduleMode.value;
-  document.getElementById('schedule-at-label').textContent = mode === 'lock' ? 'Lock at' : 'Unlock at';
+  const lockAtRow = document.getElementById('lock-at-row');
+  const lockAtInput = form.querySelector('input[name="lockAt"]');
+  const isLockMode = mode === 'lock';
+  if (lockAtRow && lockAtInput) {
+    lockAtRow.hidden = !isLockMode;
+    lockAtInput.required = isLockMode;
+    if (!isLockMode) lockAtInput.value = '';
+  }
+  document.getElementById('schedule-at-label').textContent = 'Unlock at';
   document.getElementById('schedule-help').textContent = mode === 'lock'
-    ? 'This secret stays revealable until the scheduled lock time, then the server will stop returning it.'
+    ? 'This secret stays revealable until the lock time, then is hidden until the unlock time.'
     : 'This secret is sealed immediately and can only be revealed after the scheduled unlock time.';
+}
+
+function setupPasswordToggles() {
+  document.querySelectorAll('input[type="password"]').forEach((input) => {
+    if (input.dataset.hasToggle === 'true') return;
+    input.dataset.hasToggle = 'true';
+    const wrapper = document.createElement('span');
+    wrapper.className = 'password-field';
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.append(input);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'password-toggle';
+    btn.textContent = '👁';
+    btn.setAttribute('aria-label', 'Show password');
+    btn.addEventListener('click', () => {
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.classList.toggle('active', !showing);
+      btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    });
+    wrapper.append(btn);
+  });
 }
 
 document.querySelectorAll('#add-form input[name="scheduleMode"]').forEach(el => {
@@ -480,7 +536,11 @@ document.querySelectorAll('#add-form input[name="scheduleMode"]').forEach(el => 
   }
 
   const dt = document.querySelector('#add-form input[name="scheduleAt"]');
+  const lockDt = document.querySelector('#add-form input[name="lockAt"]');
   const min = new Date(Date.now() + 60_000);
-  dt.min = new Date(min.getTime() - min.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  const minLocal = new Date(min.getTime() - min.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  dt.min = minLocal;
+  if (lockDt) lockDt.min = minLocal;
+  setupPasswordToggles();
   syncScheduleMode();
 })();

@@ -54,7 +54,8 @@
           <label class="choice"><input type="radio" name="scheduleMode" value="unlock" checked /> Lock now, unlock later</label>
           <label class="choice"><input type="radio" name="scheduleMode" value="lock" /> Available now, lock later</label>
         </fieldset>
-        <label><span id="schedule-at-label">Unlock at</span> <input type="datetime-local" name="scheduleAt" required /></label>
+        <label id="lock-at-row" hidden>Lock at <input type="datetime-local" name="lockAt" /></label>
+        <label id="schedule-at-row"><span id="schedule-at-label">Unlock at</span> <input type="datetime-local" name="scheduleAt" required /></label>
         <p id="schedule-help" class="hint">This secret is sealed immediately and can only be revealed after the scheduled unlock time.</p>
         <button type="submit">Lock it</button>
         <p class="msg" data-for="add"></p>
