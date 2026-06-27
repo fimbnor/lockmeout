@@ -262,6 +262,54 @@ function oneDayLaterIso(dateString) {
   return new Date(start + 24 * 3600 * 1000).toISOString();
 }
 
+function showConfirmDialog(title, message, isDanger = false) {
+  return new Promise((resolve) => {
+    const dialog = document.getElementById('confirm-dialog');
+    document.getElementById('confirm-dialog-title').textContent = title;
+    document.getElementById('confirm-dialog-message').textContent = message;
+    const okBtn = dialog.querySelector('button[value="ok"]');
+    if (isDanger) {
+      okBtn.classList.add('danger');
+    } else {
+      okBtn.classList.remove('danger');
+    }
+    
+    const handleClose = () => {
+      dialog.removeEventListener('close', handleClose);
+      resolve(dialog.returnValue === 'ok');
+    };
+    dialog.addEventListener('close', handleClose);
+    dialog.returnValue = '';
+    dialog.showModal();
+  });
+}
+
+function showDateTimeDialog(title, defaultIso) {
+  return new Promise((resolve) => {
+    const dialog = document.getElementById('datetime-dialog');
+    document.getElementById('datetime-dialog-title').textContent = title;
+    const input = dialog.querySelector('input[name="datetime"]');
+    
+    // Convert to local time format for datetime-local input
+    const tzOffsetMs = new Date().getTimezoneOffset() * 60000;
+    const localDate = new Date(new Date(defaultIso).getTime() - tzOffsetMs);
+    input.value = localDate.toISOString().slice(0, 16);
+
+    const handleClose = () => {
+      dialog.removeEventListener('close', handleClose);
+      if (dialog.returnValue === 'ok') {
+        const selectedLocal = new Date(input.value);
+        resolve(selectedLocal.toISOString());
+      } else {
+        resolve(null);
+      }
+    };
+    dialog.addEventListener('close', handleClose);
+    dialog.returnValue = '';
+    dialog.showModal();
+  });
+}
+
 function renderSecret(list, item) {
   const li = document.createElement('li');
   li.className = `secret ${item.accessible ? 'accessible' : 'locked'}`;
@@ -341,8 +389,9 @@ function renderSecret(list, item) {
   extendBtn.addEventListener('click', async () => {
     if (item.accessMode === 'unlock') {
       if (!item.accessible) return;
-      if (!confirm(`Re-lock "${item.label}"? The current unlocked copy will be replaced with a new time-locked version.`)) return;
-      const input = prompt('New unlock date/time (ISO 8601, e.g. YYYY-MM-DDTHH:mm:ss.SSSZ; must be in the future):', oneDayLaterIso(item.scheduleAt));
+      const confirmed = await showConfirmDialog('Confirm Re-lock', `Re-lock "${item.label}"? The current unlocked copy will be replaced with a new time-locked version.`);
+      if (!confirmed) return;
+      const input = await showDateTimeDialog('New unlock date/time', oneDayLaterIso(item.scheduleAt));
       if (!input) return;
       extendBtn.disabled = true;
       try {
@@ -370,8 +419,7 @@ function renderSecret(list, item) {
     }
 
     if (!item.canRescheduleLater) return;
-    const input = prompt(`New ${item.accessMode} date/time (ISO, must be later than the current scheduled time):`,
-      oneDayLaterIso(item.scheduleAt));
+    const input = await showDateTimeDialog(`New ${item.accessMode} time`, oneDayLaterIso(item.scheduleAt));
     if (!input) return;
     try {
       const newDate = new Date(input).toISOString();
@@ -383,7 +431,8 @@ function renderSecret(list, item) {
   });
 
   delBtn.addEventListener('click', async () => {
-    if (!confirm(`Delete "${item.label}"? This cannot be undone.`)) return;
+    const confirmed = await showConfirmDialog('Confirm Delete', `Delete "${item.label}"? This cannot be undone.`, true);
+    if (!confirmed) return;
     try {
       await api(`/vault/${item.id}`, { method: 'DELETE' });
       refreshSecrets();
