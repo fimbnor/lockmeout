@@ -120,7 +120,7 @@ button:hover:not(:disabled) {
   background: var(--accent-hover);
 }
 
-button:disabled { opacity: 0.6; cursor: not-allowed; }
+button:disabled { opacity: 0.6; cursor: progress; }
 
 .hint { color: var(--muted); font-size: 13px; margin: 4px 0 16px; }
 
