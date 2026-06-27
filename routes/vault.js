@@ -1,9 +1,11 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const Secret = require('../models/Secret');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
 router.use(auth);
+const relockLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
 
 function getAccessMode(secret) {
   return secret.lockAt ? 'lock' : 'unlock';
@@ -72,12 +74,15 @@ router.get('/', async (req, res) => {
 });
 
 // replace an accessible unlock-later secret with a newly timelocked copy.
-router.post('/:id/relock', async (req, res) => {
+router.post('/:id/relock', relockLimiter, async (req, res) => {
   const {
     label, ciphertext, drandRound, unlockAt,
   } = req.body || {};
-  if (!label || !ciphertext || drandRound === undefined || !unlockAt) {
+  if (!label || !ciphertext || !unlockAt) {
     return res.status(400).json({ error: 'missing fields' });
+  }
+  if (!Number.isInteger(drandRound) || drandRound <= 0) {
+    return res.status(400).json({ error: 'bad drandRound' });
   }
   const unlockDate = new Date(unlockAt);
   if (Number.isNaN(unlockDate.getTime())) return res.status(400).json({ error: 'bad unlockAt' });
@@ -101,7 +106,9 @@ router.post('/:id/relock', async (req, res) => {
   try {
     await existing.deleteOne();
   } catch (err) {
-    await replacement.deleteOne().catch(() => {});
+    await replacement.deleteOne().catch((cleanupErr) => {
+      console.error('failed to clean up replacement secret:', cleanupErr.message);
+    });
     return res.status(500).json({ error: 'could not replace original secret' });
   }
 

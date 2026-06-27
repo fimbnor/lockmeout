@@ -257,7 +257,8 @@ async function decryptSecret(full) {
 }
 
 function oneDayLaterIso(dateString) {
-  const start = dateString ? new Date(dateString).getTime() : Date.now();
+  const parsed = dateString ? new Date(dateString).getTime() : Date.now();
+  const start = Number.isNaN(parsed) ? Date.now() : Math.max(parsed, Date.now());
   return new Date(start + 24 * 3600 * 1000).toISOString();
 }
 
@@ -341,7 +342,7 @@ function renderSecret(list, item) {
     if (item.accessMode === 'unlock') {
       if (!item.accessible) return;
       if (!confirm(`Re-lock "${item.label}"? You will choose a new unlock time and the current unlocked copy will be replaced.`)) return;
-      const input = prompt('New unlock date/time (ISO 8601, e.g. YYYY-MM-DDTHH:mm:ss.sssZ; must be in the future):', oneDayLaterIso());
+      const input = prompt('New unlock date/time (ISO 8601, e.g. YYYY-MM-DDTHH:mm:ss.sssZ; must be in the future):', oneDayLaterIso(item.scheduleAt));
       if (!input) return;
       extendBtn.disabled = true;
       try {
