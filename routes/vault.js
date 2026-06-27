@@ -13,6 +13,9 @@ function getAccessMode(secret) {
 }
 
 function isAccessible(secret, now = Date.now()) {
+  if (secret.lockAt && secret.unlockAt) {
+    return now < secret.lockAt.getTime() || now >= secret.unlockAt.getTime();
+  }
   if (secret.lockAt) return secret.lockAt.getTime() > now;
   if (secret.unlockAt) return secret.unlockAt.getTime() <= now;
   return true;
@@ -27,22 +30,30 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'missing fields' });
   }
   const hasDrandRound = drandRound !== undefined;
-  const hasUnlockAt = Boolean(unlockAt);
   const hasLockAt = Boolean(lockAt);
-  if (hasUnlockAt === hasLockAt) {
-    return res.status(400).json({ error: 'provide exactly one of unlockAt or lockAt' });
+  const hasUnlockAt = Boolean(unlockAt);
+  if (!hasLockAt && !hasUnlockAt) {
+    return res.status(400).json({ error: 'provide at least one of unlockAt or lockAt' });
   }
-  if (hasUnlockAt && !iv && !drandRound) {
+  if (hasUnlockAt && !hasLockAt && !iv && !drandRound) {
     return res.status(400).json({ error: 'need iv (legacy) or drandRound (tlock)' });
   }
   if (hasLockAt && (!iv || hasDrandRound)) {
     return res.status(400).json({ error: 'lockAt secrets must use AES-GCM ciphertext with an iv only' });
   }
-  const scheduleField = hasLockAt ? 'lockAt' : 'unlockAt';
-  const scheduleDate = new Date(hasLockAt ? lockAt : unlockAt);
-  if (Number.isNaN(scheduleDate.getTime())) return res.status(400).json({ error: `bad ${scheduleField}` });
-  if (scheduleDate.getTime() <= Date.now()) {
-    return res.status(400).json({ error: `${scheduleField} must be in the future` });
+  const now = Date.now();
+  const lockDate = hasLockAt ? new Date(lockAt) : null;
+  const unlockDate = hasUnlockAt ? new Date(unlockAt) : null;
+  if (lockDate && Number.isNaN(lockDate.getTime())) return res.status(400).json({ error: 'bad lockAt' });
+  if (unlockDate && Number.isNaN(unlockDate.getTime())) return res.status(400).json({ error: 'bad unlockAt' });
+  if (lockDate && lockDate.getTime() <= now) {
+    return res.status(400).json({ error: 'lockAt must be in the future' });
+  }
+  if (unlockDate && unlockDate.getTime() <= now) {
+    return res.status(400).json({ error: 'unlockAt must be in the future' });
+  }
+  if (lockDate && unlockDate && unlockDate.getTime() <= lockDate.getTime()) {
+    return res.status(400).json({ error: 'unlockAt must be later than lockAt' });
   }
 
   const secret = await Secret.create({
@@ -51,8 +62,8 @@ router.post('/', async (req, res) => {
     ciphertext,
     iv,
     drandRound,
-    unlockAt: hasUnlockAt ? scheduleDate : undefined,
-    lockAt: hasLockAt ? scheduleDate : undefined,
+    unlockAt: unlockDate || undefined,
+    lockAt: lockDate || undefined,
   });
   res.json({ ok: true, id: secret._id });
 });
@@ -157,6 +168,9 @@ router.patch('/:id/extend', async (req, res) => {
     }
     if (newDate.getTime() <= s.lockAt.getTime()) {
       return res.status(400).json({ error: 'new lock time must be later than current' });
+    }
+    if (s.unlockAt && newDate.getTime() >= s.unlockAt.getTime()) {
+      return res.status(400).json({ error: 'new lock time must be earlier than unlock time' });
     }
     s.lockAt = newDate;
     await s.save();
