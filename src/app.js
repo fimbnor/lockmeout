@@ -246,6 +246,21 @@ async function refreshSecrets() {
   }
 }
 
+async function decryptSecret(full) {
+  if (full.lockAt) {
+    return aesDecrypt(session.encKey, full.ciphertext, full.iv);
+  }
+  if (full.drandRound) {
+    return tlockUnwrap(session.encKey, full.ciphertext);
+  }
+  return aesDecrypt(session.encKey, full.ciphertext, full.iv);
+}
+
+function oneDayLaterIso(dateString) {
+  const start = dateString ? new Date(dateString).getTime() : Date.now();
+  return new Date(start + 24 * 3600 * 1000).toISOString();
+}
+
 function renderSecret(list, item) {
   const li = document.createElement('li');
   li.className = `secret ${item.accessible ? 'accessible' : 'locked'}`;
@@ -283,7 +298,7 @@ function renderSecret(list, item) {
 
   const extendBtn = document.createElement('button');
   extendBtn.textContent = item.accessMode === 'lock' ? 'Postpone' : 'Re-create';
-  extendBtn.disabled = !item.canRescheduleLater;
+  extendBtn.disabled = item.accessMode === 'lock' ? !item.canRescheduleLater : !item.accessible;
 
   const delBtn = document.createElement('button');
   delBtn.textContent = 'Delete';
@@ -298,14 +313,7 @@ function renderSecret(list, item) {
     revealBtn.disabled = true;
     try {
       const full = await api(`/vault/${item.id}`);
-      let plaintext;
-      if (full.lockAt) {
-        plaintext = await aesDecrypt(session.encKey, full.ciphertext, full.iv);
-      } else if (full.drandRound) {
-        plaintext = await tlockUnwrap(session.encKey, full.ciphertext);
-      } else {
-        plaintext = await aesDecrypt(session.encKey, full.ciphertext, full.iv);
-      }
+      const plaintext = await decryptSecret(full);
       let body = li.querySelector('.secret-body');
       if (!body) {
         body = document.createElement('div');
@@ -330,9 +338,40 @@ function renderSecret(list, item) {
   });
 
   extendBtn.addEventListener('click', async () => {
+    if (item.accessMode === 'unlock') {
+      if (!item.accessible) return;
+      if (!confirm(`Re-lock "${item.label}"? You will choose a new unlock time and the current unlocked copy will be replaced.`)) return;
+      const input = prompt('New unlock date/time (ISO, must be in the future):', oneDayLaterIso());
+      if (!input) return;
+      extendBtn.disabled = true;
+      try {
+        const unlockAtDate = new Date(input);
+        if (Number.isNaN(unlockAtDate.getTime())) throw new Error('Choose a valid date and time');
+        if (unlockAtDate.getTime() <= Date.now()) throw new Error('New unlock time must be in the future');
+        const full = await api(`/vault/${item.id}`);
+        const plaintext = await decryptSecret(full);
+        const { ciphertext, drandRound } = await tlockWrap(session.encKey, plaintext, unlockAtDate.getTime());
+        await api('/vault', {
+          method: 'POST',
+          body: JSON.stringify({
+            label: item.label,
+            ciphertext,
+            drandRound,
+            unlockAt: unlockAtDate.toISOString(),
+          }),
+        });
+        await api(`/vault/${item.id}`, { method: 'DELETE' });
+        refreshSecrets();
+      } catch (err) {
+        alert(err.message);
+        extendBtn.disabled = false;
+      }
+      return;
+    }
+
     if (!item.canRescheduleLater) return;
     const input = prompt(`New ${item.accessMode} date/time (ISO, must be later than the current scheduled time):`,
-      new Date(new Date(item.scheduleAt).getTime() + 24 * 3600 * 1000).toISOString());
+      oneDayLaterIso(item.scheduleAt));
     if (!input) return;
     try {
       const newDate = new Date(input).toISOString();
