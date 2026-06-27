@@ -1,9 +1,12 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
+const { roundAt, defaultChainInfo } = require('tlock-js');
 const Secret = require('../models/Secret');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
 router.use(auth);
+const relockLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
 
 function getAccessMode(secret) {
   return secret.lockAt ? 'lock' : 'unlock';
@@ -69,6 +72,58 @@ router.get('/', async (req, res) => {
     createdAt: s.createdAt,
     canRescheduleLater: Boolean(s.lockAt) && s.lockAt.getTime() > now,
   })));
+});
+
+// replace an accessible unlock-later secret with a newly timelocked copy.
+router.post('/:id/relock', relockLimiter, async (req, res) => {
+  const {
+    label, ciphertext, drandRound, unlockAt,
+  } = req.body || {};
+  if (!label || !ciphertext || !unlockAt) {
+    return res.status(400).json({ error: 'missing fields' });
+  }
+  if (!Number.isInteger(drandRound) || drandRound <= 0) {
+    return res.status(400).json({ error: 'bad drandRound' });
+  }
+  const unlockDate = new Date(unlockAt);
+  if (Number.isNaN(unlockDate.getTime())) return res.status(400).json({ error: 'bad unlockAt' });
+  if (unlockDate.getTime() <= Date.now()) {
+    return res.status(400).json({ error: 'unlockAt must be in the future' });
+  }
+  if (drandRound !== roundAt(unlockDate.getTime(), defaultChainInfo)) {
+    return res.status(400).json({ error: 'invalid drand round for the specified unlock time' });
+  }
+
+  const existing = await Secret.findOne({ _id: req.params.id, userId: req.userId });
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (!existing.unlockAt) return res.status(400).json({ error: 'only unlock-later secrets can be re-locked' });
+  if (!isAccessible(existing)) {
+    return res.status(403).json({
+      error: 'secret is currently locked and cannot be re-locked until it becomes accessible',
+      unlockAt: existing.unlockAt,
+    });
+  }
+
+  const replacement = await Secret.create({
+    userId: req.userId,
+    label,
+    ciphertext,
+    drandRound,
+    unlockAt: unlockDate,
+  });
+
+  try {
+    await existing.deleteOne();
+  } catch (err) {
+    await replacement.deleteOne().catch((cleanupErr) => {
+      console.error(`failed to clean up replacement secret ${replacement._id}:`, cleanupErr.message);
+    });
+    return res.status(500).json({
+      error: 'failed to delete original secret; the re-locked version has been removed to maintain consistency',
+    });
+  }
+
+  res.json({ ok: true, id: replacement._id });
 });
 
 // retrieve a single secret. server enforces the schedule here.
