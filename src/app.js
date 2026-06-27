@@ -337,7 +337,7 @@ function renderSecret(list, item) {
   const meta = document.createElement('div');
   meta.className = 'secret-meta';
   const updateMeta = () => {
-    if (item.accessMode === 'lock' && item.unlockAt) {
+    if (item.accessMode === 'lock' && item.lockAt && item.unlockAt) {
       const now = Date.now();
       const lockAtMs = new Date(item.lockAt).getTime();
       const unlockAtMs = new Date(item.unlockAt).getTime();
