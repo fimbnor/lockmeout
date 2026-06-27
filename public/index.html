@@ -66,5 +66,29 @@
   </main>
 
   <script type="module" src="/app.js"></script>
+
+  <dialog id="datetime-dialog">
+    <form method="dialog">
+      <h3 id="datetime-dialog-title">Choose date and time</h3>
+      <label>
+        <input type="datetime-local" name="datetime" required />
+      </label>
+      <div class="dialog-actions">
+        <button type="submit" value="cancel" class="secondary">Cancel</button>
+        <button type="submit" value="ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <h3 id="confirm-dialog-title">Confirm</h3>
+      <p id="confirm-dialog-message"></p>
+      <div class="dialog-actions">
+        <button type="submit" value="cancel" class="secondary">Cancel</button>
+        <button type="submit" value="ok">OK</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

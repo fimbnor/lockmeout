@@ -1,0 +1,5 @@
+- [ ] Replace `prompt()` with a `<dialog>`-based custom date/time picker
+- [ ] Replace `confirm()` with a `<dialog>`-based custom confirmation modal
+- [ ] Add the HTML structures for `<dialog id="datetime-dialog">` and `<dialog id="confirm-dialog">` to `public/index.html`
+- [ ] Implement `showDateTimeDialog()` and `showConfirmDialog()` in `src/app.js`
+- [ ] Update CSS in `public/styles.css` to redesign the front end (better typography, nice dialog styles, improved buttons and inputs)
