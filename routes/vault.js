@@ -33,7 +33,7 @@ router.post('/', async (req, res) => {
   const hasLockAt = Boolean(lockAt);
   const hasUnlockAt = Boolean(unlockAt);
   if (!hasLockAt && !hasUnlockAt) {
-    return res.status(400).json({ error: 'provide unlockAt or lockAt' });
+    return res.status(400).json({ error: 'provide at least one of unlockAt or lockAt' });
   }
   if (hasUnlockAt && !hasLockAt && !iv && !drandRound) {
     return res.status(400).json({ error: 'need iv (legacy) or drandRound (tlock)' });

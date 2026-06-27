@@ -198,7 +198,7 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
       if (Number.isNaN(lockAtDate.getTime())) throw new Error('Choose a valid lock date and time');
       if (lockAtDate.getTime() <= Date.now()) throw new Error('Lock time must be in the future');
       if (scheduleAtDate.getTime() <= lockAtDate.getTime()) {
-        throw new Error('Unlock time must be later than lock time');
+        throw new Error('Schedule unlock time must be later than lock time');
       }
       const { ciphertext, iv } = await aesEncrypt(session.encKey, payload);
       body = {
