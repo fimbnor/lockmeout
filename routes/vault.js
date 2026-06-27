@@ -1,5 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { roundAt, defaultChainInfo } = require('tlock-js');
 const Secret = require('../models/Secret');
 const auth = require('../middleware/auth');
 
@@ -89,6 +90,9 @@ router.post('/:id/relock', relockLimiter, async (req, res) => {
   if (unlockDate.getTime() <= Date.now()) {
     return res.status(400).json({ error: 'unlockAt must be in the future' });
   }
+  if (drandRound !== roundAt(unlockDate.getTime(), defaultChainInfo)) {
+    return res.status(400).json({ error: 'drandRound does not match unlockAt' });
+  }
 
   const existing = await Secret.findOne({ _id: req.params.id, userId: req.userId });
   if (!existing) return res.status(404).json({ error: 'not found' });
@@ -107,7 +111,7 @@ router.post('/:id/relock', relockLimiter, async (req, res) => {
     await existing.deleteOne();
   } catch (err) {
     await replacement.deleteOne().catch((cleanupErr) => {
-      console.error('failed to clean up replacement secret:', cleanupErr.message);
+      console.error(`failed to clean up replacement secret ${replacement._id}:`, cleanupErr.message);
     });
     return res.status(500).json({ error: 'could not replace original secret' });
   }

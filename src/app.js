@@ -342,7 +342,7 @@ function renderSecret(list, item) {
     if (item.accessMode === 'unlock') {
       if (!item.accessible) return;
       if (!confirm(`Re-lock "${item.label}"? You will choose a new unlock time and the current unlocked copy will be replaced.`)) return;
-      const input = prompt('New unlock date/time (ISO 8601, e.g. YYYY-MM-DDTHH:mm:ss.sssZ; must be in the future):', oneDayLaterIso(item.scheduleAt));
+      const input = prompt('New unlock date/time (ISO 8601, e.g. YYYY-MM-DDTHH:mm:ss.SSSZ; must be in the future):', oneDayLaterIso(item.scheduleAt));
       if (!input) return;
       extendBtn.disabled = true;
       try {
