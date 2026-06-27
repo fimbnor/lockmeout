@@ -341,7 +341,7 @@ function renderSecret(list, item) {
     if (item.accessMode === 'unlock') {
       if (!item.accessible) return;
       if (!confirm(`Re-lock "${item.label}"? You will choose a new unlock time and the current unlocked copy will be replaced.`)) return;
-      const input = prompt('New unlock date/time (ISO, must be in the future):', oneDayLaterIso());
+      const input = prompt('New unlock date/time (ISO 8601, e.g. YYYY-MM-DDTHH:mm:ss.sssZ; must be in the future):', oneDayLaterIso());
       if (!input) return;
       extendBtn.disabled = true;
       try {
@@ -351,7 +351,7 @@ function renderSecret(list, item) {
         const full = await api(`/vault/${item.id}`);
         const plaintext = await decryptSecret(full);
         const { ciphertext, drandRound } = await tlockWrap(session.encKey, plaintext, unlockAtDate.getTime());
-        await api('/vault', {
+        await api(`/vault/${item.id}/relock`, {
           method: 'POST',
           body: JSON.stringify({
             label: item.label,
@@ -360,7 +360,6 @@ function renderSecret(list, item) {
             unlockAt: unlockAtDate.toISOString(),
           }),
         });
-        await api(`/vault/${item.id}`, { method: 'DELETE' });
         refreshSecrets();
       } catch (err) {
         alert(err.message);

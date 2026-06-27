@@ -71,6 +71,43 @@ router.get('/', async (req, res) => {
   })));
 });
 
+// replace an accessible unlock-later secret with a newly timelocked copy.
+router.post('/:id/relock', async (req, res) => {
+  const {
+    label, ciphertext, drandRound, unlockAt,
+  } = req.body || {};
+  if (!label || !ciphertext || drandRound === undefined || !unlockAt) {
+    return res.status(400).json({ error: 'missing fields' });
+  }
+  const unlockDate = new Date(unlockAt);
+  if (Number.isNaN(unlockDate.getTime())) return res.status(400).json({ error: 'bad unlockAt' });
+  if (unlockDate.getTime() <= Date.now()) {
+    return res.status(400).json({ error: 'unlockAt must be in the future' });
+  }
+
+  const existing = await Secret.findOne({ _id: req.params.id, userId: req.userId });
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (!existing.unlockAt) return res.status(400).json({ error: 'only unlock-later secrets can be re-locked' });
+  if (!isAccessible(existing)) return res.status(403).json({ error: 'locked', unlockAt: existing.unlockAt });
+
+  const replacement = await Secret.create({
+    userId: req.userId,
+    label,
+    ciphertext,
+    drandRound,
+    unlockAt: unlockDate,
+  });
+
+  try {
+    await existing.deleteOne();
+  } catch (err) {
+    await replacement.deleteOne().catch(() => {});
+    return res.status(500).json({ error: 'could not replace original secret' });
+  }
+
+  res.json({ ok: true, id: replacement._id });
+});
+
 // retrieve a single secret. server enforces the schedule here.
 router.get('/:id', async (req, res) => {
   const s = await Secret.findOne({ _id: req.params.id, userId: req.userId });
