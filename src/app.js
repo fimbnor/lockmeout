@@ -178,7 +178,7 @@ document.getElementById('logout').addEventListener('click', () => {
 
 document.getElementById('add-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const btn = e.target.querySelector('button');
+  const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true;
   setMsg('add', 'Encrypting…');
   try {
@@ -219,10 +219,14 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
       };
     }
     await api('/vault', { method: 'POST', body: JSON.stringify(body) });
-    e.target.reset();
-    syncScheduleMode(e.target);
     setMsg('add', 'Locked.', 'ok');
     refreshSecrets();
+    setTimeout(() => {
+      const createDialog = document.getElementById('create-dialog');
+      if (createDialog && createDialog.open) {
+        createDialog.close();
+      }
+    }, 800);
   } catch (err) {
     setMsg('add', err.message, 'error');
   } finally {
@@ -526,6 +530,38 @@ document.querySelectorAll('#add-form input[name="scheduleMode"]').forEach(el => 
   el.addEventListener('change', () => syncScheduleMode());
 });
 
+function openCreateDialog() {
+  const dialog = document.getElementById('create-dialog');
+  const form = document.getElementById('add-form');
+  form.reset();
+  syncScheduleMode(form);
+  setMsg('add', '');
+  const min = new Date(Date.now() + 60_000);
+  const minLocal = new Date(min.getTime() - min.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  const dt = form.querySelector('input[name="scheduleAt"]');
+  const lockDt = form.querySelector('input[name="lockAt"]');
+  if (dt) dt.min = minLocal;
+  if (lockDt) lockDt.min = minLocal;
+  dialog.showModal();
+}
+
+document.getElementById('new-secret-btn').addEventListener('click', openCreateDialog);
+
+document.getElementById('close-create-dialog').addEventListener('click', () => {
+  document.getElementById('create-dialog').close();
+});
+
+document.getElementById('cancel-create').addEventListener('click', () => {
+  document.getElementById('create-dialog').close();
+});
+
+document.getElementById('create-dialog').addEventListener('close', () => {
+  const form = document.getElementById('add-form');
+  form.reset();
+  syncScheduleMode(form);
+  setMsg('add', '');
+});
+
 (function init() {
   session.load();
   if (session.token && session.encKey) {
@@ -535,12 +571,6 @@ document.querySelectorAll('#add-form input[name="scheduleMode"]').forEach(el => 
     show('auth');
   }
 
-  const dt = document.querySelector('#add-form input[name="scheduleAt"]');
-  const lockDt = document.querySelector('#add-form input[name="lockAt"]');
-  const min = new Date(Date.now() + 60_000);
-  const minLocal = new Date(min.getTime() - min.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-  dt.min = minLocal;
-  if (lockDt) lockDt.min = minLocal;
   setupPasswordToggles();
   syncScheduleMode();
 })();
