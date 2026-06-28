@@ -418,32 +418,7 @@ function renderSecret(list, item) {
   extendBtn.addEventListener('click', async () => {
     if (item.accessMode === 'unlock') {
       if (!item.accessible) return;
-      const confirmed = await showConfirmDialog('Confirm Re-lock', `Re-lock "${item.label}"? The current unlocked copy will be replaced with a new time-locked version.`);
-      if (!confirmed) return;
-      const input = await showDateTimeDialog('New unlock date/time', oneDayLaterIso(item.scheduleAt));
-      if (!input) return;
-      extendBtn.disabled = true;
-      try {
-        const unlockAtDate = new Date(input);
-        if (Number.isNaN(unlockAtDate.getTime())) throw new Error('Choose a valid date and time');
-        if (unlockAtDate.getTime() <= Date.now()) throw new Error('New unlock time must be in the future');
-        const full = await api(`/vault/${item.id}`);
-        const plaintext = await decryptSecret(full);
-        const { ciphertext, drandRound } = await tlockWrap(session.encKey, plaintext, unlockAtDate.getTime());
-        await api(`/vault/${item.id}/relock`, {
-          method: 'POST',
-          body: JSON.stringify({
-            label: item.label,
-            ciphertext,
-            drandRound,
-            unlockAt: unlockAtDate.toISOString(),
-          }),
-        });
-        refreshSecrets();
-      } catch (err) {
-        alert(err.message);
-        extendBtn.disabled = false;
-      }
+      openRelockDialog(item);
       return;
     }
 
@@ -485,6 +460,25 @@ function renderSecret(list, item) {
   }
 
   list.append(li);
+}
+
+let relockTarget = null;
+
+function syncRelockScheduleMode() {
+  const form = document.getElementById('relock-form');
+  const mode = form.scheduleMode.value;
+  const lockAtRow = document.getElementById('relock-lock-at-row');
+  const lockAtInput = form.querySelector('input[name="lockAt"]');
+  const isLockMode = mode === 'lock';
+  if (lockAtRow && lockAtInput) {
+    lockAtRow.hidden = !isLockMode;
+    lockAtInput.required = isLockMode;
+    if (!isLockMode) lockAtInput.value = '';
+  }
+  document.getElementById('relock-schedule-at-label').textContent = 'Unlock at';
+  document.getElementById('relock-schedule-help').textContent = mode === 'lock'
+    ? 'This secret stays revealable until the lock time, then is hidden until the unlock time.'
+    : 'This secret is sealed immediately and can only be revealed after the scheduled unlock time.';
 }
 
 function syncScheduleMode(form = document.getElementById('add-form')) {
@@ -530,6 +524,10 @@ document.querySelectorAll('#add-form input[name="scheduleMode"]').forEach(el => 
   el.addEventListener('change', () => syncScheduleMode());
 });
 
+document.querySelectorAll('#relock-form input[name="scheduleMode"]').forEach(el => {
+  el.addEventListener('change', () => syncRelockScheduleMode());
+});
+
 function openCreateDialog() {
   const dialog = document.getElementById('create-dialog');
   const form = document.getElementById('add-form');
@@ -562,6 +560,99 @@ document.getElementById('create-dialog').addEventListener('close', () => {
   setMsg('add', '');
 });
 
+function openRelockDialog(item) {
+  relockTarget = item;
+  const dialog = document.getElementById('relock-dialog');
+  const form = document.getElementById('relock-form');
+  form.reset();
+  syncRelockScheduleMode();
+  setMsg('relock', '');
+  document.getElementById('relock-dialog-title').textContent = `Re-lock "${item.label}"`;
+  const min = new Date(Date.now() + 60_000);
+  const minLocal = new Date(min.getTime() - min.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  const dt = form.querySelector('input[name="scheduleAt"]');
+  const lockDt = form.querySelector('input[name="lockAt"]');
+  if (dt) dt.min = minLocal;
+  if (lockDt) lockDt.min = minLocal;
+  dialog.showModal();
+}
+
+document.getElementById('relock-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!relockTarget) return;
+  const item = relockTarget;
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  setMsg('relock', 'Decrypting…');
+  try {
+    const scheduleMode = e.target.scheduleMode.value;
+    const scheduleAtDate = new Date(e.target.scheduleAt.value);
+    if (Number.isNaN(scheduleAtDate.getTime())) throw new Error('Choose a valid date and time');
+    if (scheduleAtDate.getTime() <= Date.now()) throw new Error('Unlock time must be in the future');
+
+    const full = await api(`/vault/${item.id}`);
+    const plaintext = await decryptSecret(full);
+
+    let body;
+    if (scheduleMode === 'lock') {
+      const lockAtDate = new Date(e.target.lockAt.value);
+      if (Number.isNaN(lockAtDate.getTime())) throw new Error('Choose a valid lock date and time');
+      if (lockAtDate.getTime() <= Date.now()) throw new Error('Lock time must be in the future');
+      if (scheduleAtDate.getTime() <= lockAtDate.getTime()) {
+        throw new Error('Unlock time must be later than lock time');
+      }
+      setMsg('relock', 'Encrypting…');
+      const { ciphertext, iv } = await aesEncrypt(session.encKey, plaintext);
+      body = {
+        label: item.label,
+        ciphertext,
+        iv,
+        lockAt: lockAtDate.toISOString(),
+        unlockAt: scheduleAtDate.toISOString(),
+      };
+    } else {
+      setMsg('relock', 'Sealing with drand timelock…');
+      const { ciphertext, drandRound } = await tlockWrap(session.encKey, plaintext, scheduleAtDate.getTime());
+      body = {
+        label: item.label,
+        ciphertext,
+        drandRound,
+        unlockAt: scheduleAtDate.toISOString(),
+      };
+    }
+
+    await api(`/vault/${item.id}/relock`, { method: 'POST', body: JSON.stringify(body) });
+    setMsg('relock', 'Re-locked.', 'ok');
+    refreshSecrets();
+    setTimeout(() => {
+      const relockDialog = document.getElementById('relock-dialog');
+      if (relockDialog && relockDialog.open) {
+        relockDialog.close();
+      }
+    }, 800);
+  } catch (err) {
+    setMsg('relock', err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('close-relock-dialog').addEventListener('click', () => {
+  document.getElementById('relock-dialog').close();
+});
+
+document.getElementById('cancel-relock').addEventListener('click', () => {
+  document.getElementById('relock-dialog').close();
+});
+
+document.getElementById('relock-dialog').addEventListener('close', () => {
+  relockTarget = null;
+  const form = document.getElementById('relock-form');
+  form.reset();
+  syncRelockScheduleMode();
+  setMsg('relock', '');
+});
+
 (function init() {
   session.load();
   if (session.token && session.encKey) {
@@ -573,4 +664,5 @@ document.getElementById('create-dialog').addEventListener('close', () => {
 
   setupPasswordToggles();
   syncScheduleMode();
+  syncRelockScheduleMode();
 })();

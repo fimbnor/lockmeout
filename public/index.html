@@ -79,6 +79,26 @@
     </form>
   </dialog>
 
+  <dialog id="relock-dialog">
+    <button type="button" class="dialog-close" id="close-relock-dialog" aria-label="Close">✕</button>
+    <form id="relock-form" method="post" action="javascript:void(0)">
+      <h3 id="relock-dialog-title">Re-lock secret</h3>
+      <fieldset class="schedule-options">
+        <legend>Schedule</legend>
+        <label class="choice"><input type="radio" name="scheduleMode" value="unlock" checked /> Lock now, unlock later</label>
+        <label class="choice"><input type="radio" name="scheduleMode" value="lock" /> Available now, lock later</label>
+      </fieldset>
+      <label id="relock-lock-at-row" hidden>Lock at <input type="datetime-local" name="lockAt" /></label>
+      <label><span id="relock-schedule-at-label">Unlock at</span> <input type="datetime-local" name="scheduleAt" required /></label>
+      <p id="relock-schedule-help" class="hint">This secret is sealed immediately and can only be revealed after the scheduled unlock time.</p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" id="cancel-relock">Cancel</button>
+        <button type="submit">Re-lock it</button>
+      </div>
+      <p class="msg" data-for="relock"></p>
+    </form>
+  </dialog>
+
   <dialog id="datetime-dialog">
     <form method="dialog">
       <h3 id="datetime-dialog-title">Choose date and time</h3>
