@@ -144,10 +144,10 @@ router.post('/:id/relock', relockLimiter, async (req, res) => {
     userId: req.userId,
     label,
     ciphertext,
-    iv: isLockMode ? iv : undefined,
-    drandRound: isTlockMode ? drandRound : undefined,
+    ...(isLockMode && { iv }),
+    ...(isTlockMode && { drandRound }),
     unlockAt: unlockDate,
-    lockAt: lockDate || undefined,
+    ...(lockDate && { lockAt: lockDate }),
   });
 
   try {

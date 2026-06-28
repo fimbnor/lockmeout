@@ -475,7 +475,6 @@ function syncRelockScheduleMode() {
     lockAtInput.required = isLockMode;
     if (!isLockMode) lockAtInput.value = '';
   }
-  document.getElementById('relock-schedule-at-label').textContent = 'Unlock at';
   document.getElementById('relock-schedule-help').textContent = mode === 'lock'
     ? 'This secret stays revealable until the lock time, then is hidden until the unlock time.'
     : 'This secret is sealed immediately and can only be revealed after the scheduled unlock time.';
