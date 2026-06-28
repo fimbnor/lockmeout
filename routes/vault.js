@@ -88,21 +88,46 @@ router.get('/', async (req, res) => {
 // replace an accessible unlock-later secret with a newly timelocked copy.
 router.post('/:id/relock', relockLimiter, async (req, res) => {
   const {
-    label, ciphertext, drandRound, unlockAt,
+    label, ciphertext, drandRound, unlockAt, iv, lockAt,
   } = req.body || {};
   if (!label || !ciphertext || !unlockAt) {
     return res.status(400).json({ error: 'missing fields' });
   }
-  if (!Number.isInteger(drandRound) || drandRound <= 0) {
-    return res.status(400).json({ error: 'bad drandRound' });
+
+  const isLockMode = Boolean(lockAt);
+  const isTlockMode = drandRound !== undefined;
+
+  if (!isLockMode && !isTlockMode) {
+    return res.status(400).json({ error: 'provide either drandRound (tlock) or lockAt with iv (lock-later)' });
   }
+  if (isLockMode && isTlockMode) {
+    return res.status(400).json({ error: 'cannot use both drandRound and lockAt' });
+  }
+
   const unlockDate = new Date(unlockAt);
   if (Number.isNaN(unlockDate.getTime())) return res.status(400).json({ error: 'bad unlockAt' });
   if (unlockDate.getTime() <= Date.now()) {
     return res.status(400).json({ error: 'unlockAt must be in the future' });
   }
-  if (drandRound !== roundAt(unlockDate.getTime(), defaultChainInfo)) {
-    return res.status(400).json({ error: 'invalid drand round for the specified unlock time' });
+
+  let lockDate = null;
+  if (isTlockMode) {
+    if (!Number.isInteger(drandRound) || drandRound <= 0) {
+      return res.status(400).json({ error: 'bad drandRound' });
+    }
+    if (drandRound !== roundAt(unlockDate.getTime(), defaultChainInfo)) {
+      return res.status(400).json({ error: 'invalid drand round for the specified unlock time' });
+    }
+  } else {
+    if (!iv) return res.status(400).json({ error: 'iv required for lock-later mode' });
+    lockDate = new Date(lockAt);
+    if (Number.isNaN(lockDate.getTime())) return res.status(400).json({ error: 'bad lockAt' });
+    if (lockDate.getTime() <= Date.now()) {
+      return res.status(400).json({ error: 'lockAt must be in the future' });
+    }
+    if (unlockDate.getTime() <= lockDate.getTime()) {
+      return res.status(400).json({ error: 'unlockAt must be later than lockAt' });
+    }
   }
 
   const existing = await Secret.findOne({ _id: req.params.id, userId: req.userId });
@@ -119,8 +144,10 @@ router.post('/:id/relock', relockLimiter, async (req, res) => {
     userId: req.userId,
     label,
     ciphertext,
-    drandRound,
+    ...(isLockMode && { iv }),
+    ...(isTlockMode && { drandRound }),
     unlockAt: unlockDate,
+    ...(lockDate && { lockAt: lockDate }),
   });
 
   try {
