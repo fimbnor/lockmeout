@@ -45,30 +45,39 @@
     </section>
 
     <section id="vault-view" hidden>
-      <form id="add-form" method="post" action="javascript:void(0)">
-        <h2>Lock a new secret</h2>
-        <label>Label <input name="label" required maxlength="80" placeholder="e.g. wallet seed" /></label>
-        <label>Secret <textarea name="value" required rows="3"></textarea></label>
-        <label>Recovery email <input type="email" name="recoveryEmail" autocomplete="off" /></label>
-        <label>Recovery email password <input type="password" name="recoveryEmailPassword" autocomplete="off" /></label>
-        <fieldset class="schedule-options">
-          <legend>Schedule</legend>
-          <label class="choice"><input type="radio" name="scheduleMode" value="unlock" checked /> Lock now, unlock later</label>
-          <label class="choice"><input type="radio" name="scheduleMode" value="lock" /> Available now, lock later</label>
-        </fieldset>
-        <label id="lock-at-row" hidden>Lock at <input type="datetime-local" name="lockAt" /></label>
-        <label><span id="schedule-at-label">Unlock at</span> <input type="datetime-local" name="scheduleAt" required /></label>
-        <p id="schedule-help" class="hint">This secret is sealed immediately and can only be revealed after the scheduled unlock time.</p>
-        <button type="submit">Lock it</button>
-        <p class="msg" data-for="add"></p>
-      </form>
-
-      <h2>Your secrets</h2>
+      <div class="vault-header">
+        <h2>Your secrets</h2>
+        <button type="button" id="new-secret-btn">+ New Secret</button>
+      </div>
       <ul id="secrets-list" class="empty"></ul>
     </section>
   </main>
 
   <script type="module" src="/app.js"></script>
+
+  <dialog id="create-dialog">
+    <button type="button" class="dialog-close" id="close-create-dialog" aria-label="Close">✕</button>
+    <form id="add-form" method="post" action="javascript:void(0)">
+      <h3>Lock a new secret</h3>
+      <label>Label <input name="label" required maxlength="80" placeholder="e.g. wallet seed" /></label>
+      <label>Secret <textarea name="value" required rows="3"></textarea></label>
+      <label>Recovery email <input type="email" name="recoveryEmail" autocomplete="off" /></label>
+      <label>Recovery email password <input type="password" name="recoveryEmailPassword" autocomplete="off" /></label>
+      <fieldset class="schedule-options">
+        <legend>Schedule</legend>
+        <label class="choice"><input type="radio" name="scheduleMode" value="unlock" checked /> Lock now, unlock later</label>
+        <label class="choice"><input type="radio" name="scheduleMode" value="lock" /> Available now, lock later</label>
+      </fieldset>
+      <label id="lock-at-row" hidden>Lock at <input type="datetime-local" name="lockAt" /></label>
+      <label><span id="schedule-at-label">Unlock at</span> <input type="datetime-local" name="scheduleAt" required /></label>
+      <p id="schedule-help" class="hint">This secret is sealed immediately and can only be revealed after the scheduled unlock time.</p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" id="cancel-create">Cancel</button>
+        <button type="submit">Lock it</button>
+      </div>
+      <p class="msg" data-for="add"></p>
+    </form>
+  </dialog>
 
   <dialog id="datetime-dialog">
     <form method="dialog">

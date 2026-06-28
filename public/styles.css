@@ -279,7 +279,17 @@ dialog {
   padding: 24px;
   max-width: 400px;
   width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 4px 4px 0 rgba(136, 152, 184, 0.25);
+}
+
+/* Fix: prevent form inside dialogs from inheriting the full form card styles */
+dialog form {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
 }
 
 dialog::backdrop {
@@ -288,7 +298,7 @@ dialog::backdrop {
 }
 
 dialog h3 {
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   font-size: 18px;
 }
 
@@ -304,6 +314,44 @@ dialog p {
   margin-top: 20px;
 }
 
+.dialog-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  min-width: unset;
+}
+
+.dialog-close:hover {
+  color: var(--text);
+  border-color: #484858;
+  background: rgba(255,255,255,0.05);
+}
+
+#create-dialog {
+  max-width: 520px;
+  position: relative;
+}
+
+.vault-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.vault-header h2 {
+  margin: 32px 0 16px;
+}
+
 button.secondary {
   background: transparent;
   color: var(--muted);
@@ -313,4 +361,24 @@ button.secondary {
 button.secondary:hover {
   background: var(--border);
   color: var(--text);
+}
+
+@media (max-width: 540px) {
+  .secret-head {
+    flex-wrap: wrap;
+  }
+
+  .secret-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  dialog {
+    padding: 20px 16px;
+  }
+
+  #create-dialog {
+    padding-top: 44px;
+  }
 }
