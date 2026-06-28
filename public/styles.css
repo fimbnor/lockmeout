@@ -1,14 +1,14 @@
 :root {
-  --bg: #090a0f;
-  --panel: #14161f;
-  --border: #222631;
-  --text: #e2e4e9;
-  --muted: #858b98;
-  --accent: #5e95ff;
-  --accent-hover: #75a5ff;
-  --danger: #ff5f5f;
-  --danger-hover: #ff7575;
-  --ok: #5ecf81;
+  --bg: #080810;
+  --panel: #0e0e1a;
+  --border: #303040;
+  --text: #c0c8d8;
+  --muted: #737a90;
+  --accent: #8898b8;
+  --accent-hover: #9aa8c8;
+  --danger: #cc2222;
+  --danger-hover: #e03333;
+  --ok: #22aa44;
 }
 
 * { box-sizing: border-box; }
@@ -25,20 +25,33 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 32px;
+  padding: 14px 24px;
   background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  box-shadow: 0 1px 10px rgba(0,0,0,0.2);
+  border-bottom: 2px solid var(--border);
+}
+
+#header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 header h1 { 
   margin: 0; 
   font-size: 22px; 
   font-weight: 700;
-  letter-spacing: -0.5px; 
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
 }
 
-#user-bar { display: flex; gap: 16px; align-items: center; color: var(--muted); font-size: 14px; }
+#user-email {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+#user-bar { display: flex; gap: 16px; align-items: center; }
 
 main {
   max-width: 680px;
@@ -59,17 +72,17 @@ h2 {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 }
 .tab:hover:not(.active) {
-  border-color: #383e4d;
+  border-color: #484858;
   color: var(--text);
 }
 .tab.active { 
-  background: rgba(94, 149, 255, 0.1);
+  background: rgba(136, 152, 184, 0.1);
   color: var(--accent); 
   border-color: var(--accent); 
 }
@@ -77,9 +90,8 @@ h2 {
 form {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 0;
   padding: 24px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
 }
 
 label {
@@ -98,7 +110,7 @@ input:not([type="radio"]):not([type="checkbox"]), textarea {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0;
   font: inherit;
   transition: border-color 0.2s;
 }
@@ -119,13 +131,13 @@ input:not([type="radio"]):not([type="checkbox"]), textarea {
   padding: 10px 12px;
   min-width: 46px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0;
   background: transparent;
   color: var(--muted);
 }
 
 .password-toggle:hover:not(:disabled) {
-  border-color: #383e4d;
+  border-color: #484858;
   color: var(--text);
   background: rgba(255,255,255,0.05);
 }
@@ -139,17 +151,21 @@ input:focus, textarea:focus { outline: none; border-color: var(--accent); }
 
 button {
   padding: 12px 20px;
-  border-radius: 8px;
-  border: 0;
-  background: var(--accent);
-  color: #fff;
+  border-radius: 0;
+  border: 2px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 13px;
 }
 
 button:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--accent);
+  color: var(--bg);
 }
 
 button:disabled { opacity: 0.6; cursor: progress; }
@@ -160,7 +176,7 @@ fieldset {
   margin: 0 0 12px;
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 legend {
@@ -197,16 +213,14 @@ legend {
 .secret {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 0;
   padding: 16px 20px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  transition: transform 0.2s, box-shadow 0.2s;
+  margin-bottom: 8px;
+  transition: border-color 0.2s;
 }
 
 .secret:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  border-color: var(--accent);
 }
 
 .secret-head {
@@ -227,28 +241,30 @@ legend {
   color: var(--muted);
   border: 1px solid var(--border);
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 13px;
   font-weight: 500;
   transition: all 0.2s;
+  text-transform: none;
+  letter-spacing: 0;
 }
 .secret-actions button:hover:not(:disabled) { 
   color: var(--text); 
-  border-color: #383e4d;
+  border-color: #484858;
   background: rgba(255,255,255,0.05);
 }
-.secret-actions .danger { color: var(--danger); border-color: #4a2222; }
+.secret-actions .danger { color: var(--danger); border-color: #4a2020; }
 .secret-actions .danger:hover:not(:disabled) { 
   color: var(--danger-hover); 
   border-color: var(--danger); 
-  background: rgba(255, 95, 95, 0.1);
+  background: rgba(204, 34, 34, 0.1);
 }
 
 .secret-body {
   margin-top: 10px;
   padding: 10px;
-  background: #0c0e13;
-  border-radius: 6px;
+  background: #060608;
+  border-radius: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
   word-break: break-all;
@@ -258,12 +274,12 @@ legend {
 dialog {
   background: var(--panel);
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 2px solid var(--border);
+  border-radius: 0;
   padding: 24px;
   max-width: 400px;
   width: 90%;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  box-shadow: 4px 4px 0 rgba(136, 152, 184, 0.25);
 }
 
 dialog::backdrop {
@@ -290,10 +306,11 @@ dialog p {
 
 button.secondary {
   background: transparent;
-  color: var(--text);
+  color: var(--muted);
   border: 1px solid var(--border);
 }
 
 button.secondary:hover {
   background: var(--border);
+  color: var(--text);
 }
