@@ -482,6 +482,7 @@ function syncRelockScheduleMode() {
   const isLockMode = mode === 'lock';
   if (lockAtRow && lockAtInput) {
     lockAtRow.hidden = !isLockMode;
+    lockAtInput.disabled = !isLockMode;
     lockAtInput.required = isLockMode;
     if (!isLockMode) lockAtInput.value = '';
   }
@@ -497,6 +498,7 @@ function syncScheduleMode(form = document.getElementById('add-form')) {
   const isLockMode = mode === 'lock';
   if (lockAtRow && lockAtInput) {
     lockAtRow.hidden = !isLockMode;
+    lockAtInput.disabled = !isLockMode;
     lockAtInput.required = isLockMode;
     if (!isLockMode) lockAtInput.value = '';
   }
