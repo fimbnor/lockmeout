@@ -21,6 +21,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+body.dialog-open {
+  overflow: hidden;
+}
+
 header {
   display: flex;
   justify-content: space-between;
@@ -276,10 +280,11 @@ dialog {
   color: var(--text);
   border: 2px solid var(--border);
   border-radius: 0;
-  padding: 24px;
+  padding: 28px 24px;
   max-width: 400px;
   width: 90%;
   max-height: 90vh;
+  overflow-x: hidden;
   overflow-y: auto;
   box-shadow: 4px 4px 0 rgba(136, 152, 184, 0.25);
 }
@@ -375,7 +380,7 @@ button.secondary:hover {
   }
 
   dialog {
-    padding: 20px 16px;
+    padding: 24px 18px;
   }
 
   #create-dialog {
