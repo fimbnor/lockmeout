@@ -278,6 +278,16 @@ function oneDayLaterIso(dateString) {
   return new Date(start + 24 * 3600 * 1000).toISOString();
 }
 
+function updatePageScrollLock() {
+  const hasOpenDialog = Boolean(document.querySelector('dialog[open]'));
+  document.body.classList.toggle('dialog-open', hasOpenDialog);
+}
+
+function openModalDialog(dialog) {
+  dialog.showModal();
+  updatePageScrollLock();
+}
+
 function showConfirmDialog(title, message, isDanger = false) {
   return new Promise((resolve) => {
     const dialog = document.getElementById('confirm-dialog');
@@ -296,7 +306,7 @@ function showConfirmDialog(title, message, isDanger = false) {
     };
     dialog.addEventListener('close', handleClose);
     dialog.returnValue = '';
-    dialog.showModal();
+    openModalDialog(dialog);
   });
 }
 
@@ -322,7 +332,7 @@ function showDateTimeDialog(title, defaultIso) {
     };
     dialog.addEventListener('close', handleClose);
     dialog.returnValue = '';
-    dialog.showModal();
+    openModalDialog(dialog);
   });
 }
 
@@ -539,7 +549,7 @@ function openCreateDialog() {
   const lockDt = form.querySelector('input[name="lockAt"]');
   if (dt) dt.min = minLocal;
   if (lockDt) lockDt.min = minLocal;
-  dialog.showModal();
+  openModalDialog(dialog);
 }
 
 document.getElementById('new-secret-btn').addEventListener('click', openCreateDialog);
@@ -573,7 +583,7 @@ function openRelockDialog(item) {
   const lockDt = form.querySelector('input[name="lockAt"]');
   if (dt) dt.min = minLocal;
   if (lockDt) lockDt.min = minLocal;
-  dialog.showModal();
+  openModalDialog(dialog);
 }
 
 document.getElementById('relock-form').addEventListener('submit', async (e) => {
@@ -664,4 +674,7 @@ document.getElementById('relock-dialog').addEventListener('close', () => {
   setupPasswordToggles();
   syncScheduleMode();
   syncRelockScheduleMode();
+  document.querySelectorAll('dialog').forEach((dialog) => {
+    dialog.addEventListener('close', updatePageScrollLock);
+  });
 })();
