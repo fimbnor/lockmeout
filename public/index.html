@@ -67,9 +67,25 @@
         <legend>Schedule</legend>
         <label class="choice"><input type="radio" name="scheduleMode" value="unlock" checked /> Lock now, unlock later</label>
         <label class="choice"><input type="radio" name="scheduleMode" value="lock" /> Available now, lock later</label>
+        <label class="choice"><input type="checkbox" name="useWeeklyLock" /> Use weekly lock schedule</label>
       </fieldset>
       <label id="lock-at-row" hidden>Lock at <input type="datetime-local" name="lockAt" /></label>
-      <label><span id="schedule-at-label">Unlock at</span> <input type="datetime-local" name="scheduleAt" required /></label>
+      <label id="schedule-at-row"><span id="schedule-at-label">Unlock at</span> <input type="datetime-local" name="scheduleAt" required /></label>
+      <fieldset id="weekly-lock-row" hidden>
+        <legend>Weekly lock schedule</legend>
+        <div class="weekday-grid">
+          <label class="choice"><input type="checkbox" name="weeklyDays" value="0" /> Sun</label>
+          <label class="choice"><input type="checkbox" name="weeklyDays" value="1" /> Mon</label>
+          <label class="choice"><input type="checkbox" name="weeklyDays" value="2" /> Tue</label>
+          <label class="choice"><input type="checkbox" name="weeklyDays" value="3" /> Wed</label>
+          <label class="choice"><input type="checkbox" name="weeklyDays" value="4" /> Thu</label>
+          <label class="choice"><input type="checkbox" name="weeklyDays" value="5" /> Fri</label>
+          <label class="choice"><input type="checkbox" name="weeklyDays" value="6" /> Sat</label>
+        </div>
+        <label>Locked from <input type="time" name="weeklyStartTime" /></label>
+        <label>Locked until <input type="time" name="weeklyEndTime" /></label>
+        <label class="choice"><input type="checkbox" name="repeatWeekly" /> Repeat every week</label>
+      </fieldset>
       <p id="schedule-help" class="hint">This secret is sealed immediately and can only be revealed after the scheduled unlock time.</p>
       <div class="dialog-actions">
         <button type="button" class="secondary" id="cancel-create">Cancel</button>

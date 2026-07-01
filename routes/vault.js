@@ -9,10 +9,65 @@ router.use(auth);
 const relockLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
 
 function getAccessMode(secret) {
-  return secret.lockAt ? 'lock' : 'unlock';
+  return secret.lockAt || (Array.isArray(secret.weeklyLockSchedule) && secret.weeklyLockSchedule.length > 0) ? 'lock' : 'unlock';
+}
+
+function parseTimeToMinutes(time) {
+  if (!/^\d{2}:\d{2}$/.test(time)) return null;
+  const [hours, minutes] = time.split(':').map(Number);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function isWithinWeeklyLockWindow(secret, now = Date.now()) {
+  const schedule = secret.weeklyLockSchedule;
+  if (!Array.isArray(schedule) || schedule.length === 0) return false;
+
+  if (!secret.repeatWeekly && secret.createdAt) {
+    const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+    if (now >= secret.createdAt.getTime() + oneWeekMs) return false;
+  }
+
+  const offsetMinutes = Number(secret.scheduleTimezoneOffsetMinutes) || 0;
+  const localNow = new Date(now - (offsetMinutes * 60 * 1000));
+  const dayOfWeek = localNow.getUTCDay();
+  const minutesNow = localNow.getUTCHours() * 60 + localNow.getUTCMinutes();
+
+  return schedule.some((entry) => {
+    const start = parseTimeToMinutes(entry.startTime);
+    const end = parseTimeToMinutes(entry.endTime);
+    if (start === null || end === null || start === end) return false;
+
+    if (start < end) {
+      return entry.dayOfWeek === dayOfWeek && minutesNow >= start && minutesNow < end;
+    }
+
+    const nextDay = (entry.dayOfWeek + 1) % 7;
+    return (entry.dayOfWeek === dayOfWeek && minutesNow >= start)
+      || (nextDay === dayOfWeek && minutesNow < end);
+  });
+}
+
+function validateWeeklyLockSchedule(weeklyLockSchedule) {
+  if (weeklyLockSchedule === undefined) return { ok: true };
+  if (!Array.isArray(weeklyLockSchedule) || weeklyLockSchedule.length === 0) {
+    return { ok: false, error: 'weeklyLockSchedule must contain at least one day' };
+  }
+  for (const item of weeklyLockSchedule) {
+    if (!Number.isInteger(item?.dayOfWeek) || item.dayOfWeek < 0 || item.dayOfWeek > 6) {
+      return { ok: false, error: 'bad weeklyLockSchedule dayOfWeek' };
+    }
+    const start = parseTimeToMinutes(item?.startTime);
+    const end = parseTimeToMinutes(item?.endTime);
+    if (start === null || end === null || start === end) {
+      return { ok: false, error: 'bad weeklyLockSchedule time range' };
+    }
+  }
+  return { ok: true };
 }
 
 function isAccessible(secret, now = Date.now()) {
+  if (isWithinWeeklyLockWindow(secret, now)) return false;
   if (secret.lockAt && secret.unlockAt) {
     return now < secret.lockAt.getTime() || now >= secret.unlockAt.getTime();
   }
@@ -24,7 +79,7 @@ function isAccessible(secret, now = Date.now()) {
 // store an encrypted secret with either a future unlock time or lock time
 router.post('/', async (req, res) => {
   const {
-    label, ciphertext, iv, drandRound, unlockAt, lockAt,
+    label, ciphertext, iv, drandRound, unlockAt, lockAt, weeklyLockSchedule, repeatWeekly, scheduleTimezoneOffsetMinutes,
   } = req.body || {};
   if (!label || !ciphertext) {
     return res.status(400).json({ error: 'missing fields' });
@@ -32,8 +87,9 @@ router.post('/', async (req, res) => {
   const hasDrandRound = drandRound !== undefined;
   const hasLockAt = Boolean(lockAt);
   const hasUnlockAt = Boolean(unlockAt);
-  if (!hasLockAt && !hasUnlockAt) {
-    return res.status(400).json({ error: 'provide at least one of unlockAt or lockAt' });
+  const hasWeeklySchedule = Array.isArray(weeklyLockSchedule) && weeklyLockSchedule.length > 0;
+  if (!hasLockAt && !hasUnlockAt && !hasWeeklySchedule) {
+    return res.status(400).json({ error: 'provide unlockAt, lockAt, or weeklyLockSchedule' });
   }
   if (hasUnlockAt && !hasLockAt && !iv && !drandRound) {
     return res.status(400).json({ error: 'need iv (legacy) or drandRound (tlock)' });
@@ -41,7 +97,11 @@ router.post('/', async (req, res) => {
   if (hasLockAt && (!iv || hasDrandRound)) {
     return res.status(400).json({ error: 'lockAt secrets must use AES-GCM ciphertext with an iv only' });
   }
+  if (hasWeeklySchedule && !iv) {
+    return res.status(400).json({ error: 'weeklyLockSchedule secrets must include iv' });
+  }
   const now = Date.now();
+  const tzOffset = Number(scheduleTimezoneOffsetMinutes);
   const lockDate = hasLockAt ? new Date(lockAt) : null;
   const unlockDate = hasUnlockAt ? new Date(unlockAt) : null;
   if (lockDate && Number.isNaN(lockDate.getTime())) return res.status(400).json({ error: 'bad lockAt' });
@@ -55,6 +115,8 @@ router.post('/', async (req, res) => {
   if (lockDate && unlockDate && unlockDate.getTime() <= lockDate.getTime()) {
     return res.status(400).json({ error: 'unlockAt must be later than lockAt' });
   }
+  const weeklyValidation = validateWeeklyLockSchedule(weeklyLockSchedule);
+  if (!weeklyValidation.ok) return res.status(400).json({ error: weeklyValidation.error });
 
   const secret = await Secret.create({
     userId: req.userId,
@@ -64,6 +126,9 @@ router.post('/', async (req, res) => {
     drandRound,
     unlockAt: unlockDate || undefined,
     lockAt: lockDate || undefined,
+    weeklyLockSchedule: hasWeeklySchedule ? weeklyLockSchedule : undefined,
+    repeatWeekly: Boolean(repeatWeekly),
+    scheduleTimezoneOffsetMinutes: Number.isFinite(tzOffset) ? tzOffset : 0,
   });
   res.json({ ok: true, id: secret._id });
 });
@@ -79,6 +144,9 @@ router.get('/', async (req, res) => {
     unlockAt: s.unlockAt,
     lockAt: s.lockAt,
     scheduleAt: s.lockAt || s.unlockAt,
+    weeklyLockSchedule: s.weeklyLockSchedule,
+    repeatWeekly: s.repeatWeekly,
+    scheduleTimezoneOffsetMinutes: s.scheduleTimezoneOffsetMinutes,
     accessible: isAccessible(s, now),
     createdAt: s.createdAt,
     canRescheduleLater: Boolean(s.lockAt) && s.lockAt.getTime() > now,
@@ -178,7 +246,8 @@ router.get('/:id', async (req, res) => {
   }
   res.json({
     id: s._id, label: s.label, ciphertext: s.ciphertext, iv: s.iv,
-    drandRound: s.drandRound, unlockAt: s.unlockAt, lockAt: s.lockAt,
+    drandRound: s.drandRound, unlockAt: s.unlockAt, lockAt: s.lockAt, weeklyLockSchedule: s.weeklyLockSchedule,
+    repeatWeekly: s.repeatWeekly, scheduleTimezoneOffsetMinutes: s.scheduleTimezoneOffsetMinutes,
   });
 });
 

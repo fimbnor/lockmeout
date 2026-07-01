@@ -183,17 +183,34 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
   setMsg('add', 'Encrypting…');
   try {
     const scheduleMode = e.target.scheduleMode.value;
+    const useWeeklyLock = scheduleMode === 'lock' && e.target.useWeeklyLock.checked;
     const label = e.target.label.value.trim();
     const payload = JSON.stringify({
       value: e.target.value.value,
       recoveryEmail: e.target.recoveryEmail.value || null,
       recoveryEmailPassword: e.target.recoveryEmailPassword.value || null,
     });
-    const scheduleAtDate = new Date(e.target.scheduleAt.value);
-    if (Number.isNaN(scheduleAtDate.getTime())) throw new Error('Choose a valid date and time');
-    const scheduleAt = scheduleAtDate.toISOString();
     let body;
-    if (scheduleMode === 'lock') {
+    if (useWeeklyLock) {
+      const selectedDays = [...e.target.querySelectorAll('input[name="weeklyDays"]:checked')]
+        .map((input) => Number(input.value));
+      if (selectedDays.length === 0) throw new Error('Select at least one day for weekly lock');
+      const startTime = e.target.weeklyStartTime.value;
+      const endTime = e.target.weeklyEndTime.value;
+      if (!startTime || !endTime) throw new Error('Choose both weekly lock start and end times');
+      if (startTime === endTime) throw new Error('Weekly lock start and end times cannot be the same');
+      const { ciphertext, iv } = await aesEncrypt(session.encKey, payload);
+      body = {
+        label,
+        ciphertext,
+        iv,
+        weeklyLockSchedule: selectedDays.map((dayOfWeek) => ({ dayOfWeek, startTime, endTime })),
+        repeatWeekly: e.target.repeatWeekly.checked,
+        scheduleTimezoneOffsetMinutes: new Date().getTimezoneOffset(),
+      };
+    } else if (scheduleMode === 'lock') {
+      const scheduleAtDate = new Date(e.target.scheduleAt.value);
+      if (Number.isNaN(scheduleAtDate.getTime())) throw new Error('Choose a valid date and time');
       const lockAtDate = new Date(e.target.lockAt.value);
       if (Number.isNaN(lockAtDate.getTime())) throw new Error('Choose a valid lock date and time');
       if (lockAtDate.getTime() <= Date.now()) throw new Error('Lock time must be in the future');
@@ -206,9 +223,12 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
         ciphertext,
         iv,
         lockAt: lockAtDate.toISOString(),
-        unlockAt: scheduleAt,
+        unlockAt: scheduleAtDate.toISOString(),
       };
     } else {
+      const scheduleAtDate = new Date(e.target.scheduleAt.value);
+      if (Number.isNaN(scheduleAtDate.getTime())) throw new Error('Choose a valid date and time');
+      const scheduleAt = scheduleAtDate.toISOString();
       setMsg('add', 'Sealing with drand timelock…');
       const { ciphertext, drandRound } = await tlockWrap(session.encKey, payload, scheduleAtDate.getTime());
       body = {
@@ -276,6 +296,17 @@ function oneDayLaterIso(dateString) {
   const parsed = dateString ? new Date(dateString).getTime() : Date.now();
   const start = Number.isNaN(parsed) ? Date.now() : Math.max(parsed, Date.now());
   return new Date(start + 24 * 3600 * 1000).toISOString();
+}
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function formatWeeklyScheduleMeta(item) {
+  const schedule = item.weeklyLockSchedule || [];
+  if (!schedule.length) return '';
+  const days = [...new Set(schedule.map((entry) => WEEKDAY_LABELS[entry.dayOfWeek]))].join(', ');
+  const firstWindow = schedule[0];
+  const repeatText = item.repeatWeekly ? 'repeats weekly' : 'this week only';
+  return `${item.accessible ? 'Unlocked now' : 'Locked now'} • ${days} ${firstWindow.startTime}-${firstWindow.endTime} (${repeatText})`;
 }
 
 function updatePageScrollLock() {
@@ -351,6 +382,10 @@ function renderSecret(list, item) {
   const meta = document.createElement('div');
   meta.className = 'secret-meta';
   const updateMeta = () => {
+    if (item.weeklyLockSchedule?.length) {
+      meta.textContent = formatWeeklyScheduleMeta(item);
+      return;
+    }
     if (item.accessMode === 'lock' && item.lockAt && item.unlockAt) {
       const now = Date.now();
       const lockAtMs = new Date(item.lockAt).getTime();
@@ -362,6 +397,10 @@ function renderSecret(list, item) {
       } else {
         meta.textContent = `Unlocked since ${new Date(item.unlockAt).toLocaleString()}`;
       }
+      return;
+    }
+    if (!item.scheduleAt) {
+      meta.textContent = item.accessible ? 'Unlocked' : 'Locked';
       return;
     }
     const scheduleAt = new Date(item.scheduleAt).getTime();
@@ -455,18 +494,20 @@ function renderSecret(list, item) {
     }
   });
 
-  const scheduleAtMs = new Date(item.scheduleAt).getTime();
-  const msUntilStateChange = scheduleAtMs - Date.now();
-  if (msUntilStateChange > 0) {
-    const tick = setInterval(() => {
-      const remaining = scheduleAtMs - Date.now();
-      if (remaining <= 0) {
-        clearInterval(tick);
-        refreshSecrets();
-      } else {
-        updateMeta();
-      }
-    }, 1000);
+  if (item.scheduleAt) {
+    const scheduleAtMs = new Date(item.scheduleAt).getTime();
+    const msUntilStateChange = scheduleAtMs - Date.now();
+    if (msUntilStateChange > 0) {
+      const tick = setInterval(() => {
+        const remaining = scheduleAtMs - Date.now();
+        if (remaining <= 0) {
+          clearInterval(tick);
+          refreshSecrets();
+        } else {
+          updateMeta();
+        }
+      }, 1000);
+    }
   }
 
   list.append(li);
@@ -494,18 +535,51 @@ function syncRelockScheduleMode() {
 function syncScheduleMode(form = document.getElementById('add-form')) {
   const mode = form.scheduleMode.value;
   const lockAtRow = document.getElementById('lock-at-row');
+  const scheduleAtRow = document.getElementById('schedule-at-row');
+  const weeklyLockRow = document.getElementById('weekly-lock-row');
   const lockAtInput = form.querySelector('input[name="lockAt"]');
+  const scheduleAtInput = form.querySelector('input[name="scheduleAt"]');
+  const useWeeklyLockInput = form.querySelector('input[name="useWeeklyLock"]');
+  const weeklyStartInput = form.querySelector('input[name="weeklyStartTime"]');
+  const weeklyEndInput = form.querySelector('input[name="weeklyEndTime"]');
+  const weeklyDayInputs = form.querySelectorAll('input[name="weeklyDays"]');
   const isLockMode = mode === 'lock';
-  if (lockAtRow && lockAtInput) {
-    lockAtRow.hidden = !isLockMode;
-    lockAtInput.disabled = !isLockMode;
-    lockAtInput.required = isLockMode;
-    if (!isLockMode) lockAtInput.value = '';
+  const usingWeeklyLock = isLockMode && Boolean(useWeeklyLockInput?.checked);
+  if (lockAtRow && lockAtInput && scheduleAtRow && scheduleAtInput) {
+    lockAtRow.hidden = !isLockMode || usingWeeklyLock;
+    scheduleAtRow.hidden = usingWeeklyLock;
+    lockAtInput.disabled = !isLockMode || usingWeeklyLock;
+    scheduleAtInput.disabled = usingWeeklyLock;
+    lockAtInput.required = isLockMode && !usingWeeklyLock;
+    scheduleAtInput.required = !usingWeeklyLock;
+    if (!isLockMode || usingWeeklyLock) lockAtInput.value = '';
+  }
+  if (weeklyLockRow) {
+    weeklyLockRow.hidden = !usingWeeklyLock;
+  }
+  if (weeklyStartInput && weeklyEndInput) {
+    weeklyStartInput.disabled = !usingWeeklyLock;
+    weeklyEndInput.disabled = !usingWeeklyLock;
+    weeklyStartInput.required = usingWeeklyLock;
+    weeklyEndInput.required = usingWeeklyLock;
+  }
+  weeklyDayInputs.forEach((input) => {
+    input.disabled = !usingWeeklyLock;
+    input.required = false;
+    if (!usingWeeklyLock) input.checked = false;
+  });
+  if (!isLockMode && useWeeklyLockInput) {
+    useWeeklyLockInput.checked = false;
+  }
+  if (useWeeklyLockInput) {
+    useWeeklyLockInput.disabled = !isLockMode;
   }
   document.getElementById('schedule-at-label').textContent = 'Unlock at';
-  document.getElementById('schedule-help').textContent = mode === 'lock'
-    ? 'This secret stays revealable until the lock time, then is hidden until the unlock time.'
-    : 'This secret is sealed immediately and can only be revealed after the scheduled unlock time.';
+  document.getElementById('schedule-help').textContent = usingWeeklyLock
+    ? 'Pick days and daily lock times. Optionally mark repeat to keep this schedule every week.'
+    : (mode === 'lock'
+      ? 'This secret stays revealable until the lock time, then is hidden until the unlock time.'
+      : 'This secret is sealed immediately and can only be revealed after the scheduled unlock time.');
 }
 
 function setupPasswordToggles() {
@@ -533,6 +607,10 @@ function setupPasswordToggles() {
 
 document.querySelectorAll('#add-form input[name="scheduleMode"]').forEach(el => {
   el.addEventListener('change', () => syncScheduleMode());
+});
+
+document.querySelector('#add-form input[name="useWeeklyLock"]')?.addEventListener('change', () => {
+  syncScheduleMode();
 });
 
 document.querySelectorAll('#relock-form input[name="scheduleMode"]').forEach(el => {
