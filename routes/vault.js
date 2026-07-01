@@ -7,7 +7,7 @@ const auth = require('../middleware/auth');
 const router = express.Router();
 router.use(auth);
 const relockLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
-const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const MILLISECONDS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 
 function getAccessMode(secret) {
   return secret.lockAt || (Array.isArray(secret.weeklyLockSchedule) && secret.weeklyLockSchedule.length > 0) ? 'lock' : 'unlock';
@@ -24,12 +24,20 @@ function isWithinWeeklyLockWindow(secret, now = Date.now()) {
   const schedule = secret.weeklyLockSchedule;
   if (!Array.isArray(schedule) || schedule.length === 0) return false;
 
+  const offsetMinutes = Number(secret.scheduleTimezoneOffsetMinutes) || 0;
+  const localNowMs = now - (offsetMinutes * 60 * 1000);
+
   if (!secret.repeatWeekly && secret.createdAt) {
-    if (now >= secret.createdAt.getTime() + ONE_WEEK_MS) return false;
+    const localCreatedAt = new Date(secret.createdAt.getTime() - (offsetMinutes * 60 * 1000));
+    const localWeekStartMs = Date.UTC(
+      localCreatedAt.getUTCFullYear(),
+      localCreatedAt.getUTCMonth(),
+      localCreatedAt.getUTCDate() - localCreatedAt.getUTCDay()
+    );
+    if (localNowMs >= localWeekStartMs + MILLISECONDS_PER_WEEK) return false;
   }
 
-  const offsetMinutes = Number(secret.scheduleTimezoneOffsetMinutes) || 0;
-  const localNow = new Date(now - (offsetMinutes * 60 * 1000));
+  const localNow = new Date(localNowMs);
   const dayOfWeek = localNow.getUTCDay();
   const minutesNow = localNow.getUTCHours() * 60 + localNow.getUTCMinutes();
 
