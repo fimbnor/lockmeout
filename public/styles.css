@@ -203,6 +203,18 @@ legend {
   accent-color: var(--accent);
 }
 
+.choice input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.weekday-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
 .msg { min-height: 1.2em; margin: 12px 0 0; font-size: 13px; }
 .msg.error { color: var(--danger); }
 .msg.ok { color: var(--ok); }

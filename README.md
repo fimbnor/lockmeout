@@ -19,6 +19,7 @@ Open http://localhost:3000
 - Secrets are encrypted in the browser with a key derived from your master password (PBKDF2 → AES-GCM)
 - Unlock-later secrets are additionally wrapped with [drand timelock encryption](https://drand.love/) targeting the unlock time's round
 - Lock-later secrets stay as AES-GCM ciphertext and the server stops returning them after the scheduled lock time
+- Secrets can also use a weekly lock schedule by choosing days + a daily locked time window, with optional weekly repeat
 - Server stores the ciphertext plus either an unlock timestamp or a lock timestamp
 - Server refuses to return an unlock-later secret until `unlockAt <= now`, and refuses to return a lock-later secret once `lockAt <= now`
 - You can't extend a tlock-encrypted secret server-side; reveal at unlock and re-create with a later unlock time
@@ -29,7 +30,7 @@ Open http://localhost:3000
 - `POST /api/auth/signup` — `{ email, salt, authHash }`
 - `POST /api/auth/salt` — `{ email }` → `{ salt }`
 - `POST /api/auth/login` — `{ email, authHash }` → `{ token }`
-- `POST /api/vault` — either `{ label, ciphertext, drandRound, unlockAt }` / legacy `{ ciphertext, iv, unlockAt }`, or `{ label, ciphertext, iv, lockAt }`
+- `POST /api/vault` — either `{ label, ciphertext, drandRound, unlockAt }` / legacy `{ ciphertext, iv, unlockAt }`, `{ label, ciphertext, iv, lockAt }`, or `{ label, ciphertext, iv, weeklyLockSchedule, repeatWeekly, scheduleTimezoneOffsetMinutes }`
 - `GET /api/vault` — list (metadata only)
 - `GET /api/vault/:id` — returns ciphertext if unlocked, 403 if not
 - `PATCH /api/vault/:id/extend` — `{ scheduleAt }` (legacy `{ unlockAt }` still accepted; for lock-later items this reschedules the lock later)
