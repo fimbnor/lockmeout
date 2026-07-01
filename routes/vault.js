@@ -7,6 +7,7 @@ const auth = require('../middleware/auth');
 const router = express.Router();
 router.use(auth);
 const relockLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function getAccessMode(secret) {
   return secret.lockAt || (Array.isArray(secret.weeklyLockSchedule) && secret.weeklyLockSchedule.length > 0) ? 'lock' : 'unlock';
@@ -24,8 +25,7 @@ function isWithinWeeklyLockWindow(secret, now = Date.now()) {
   if (!Array.isArray(schedule) || schedule.length === 0) return false;
 
   if (!secret.repeatWeekly && secret.createdAt) {
-    const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-    if (now >= secret.createdAt.getTime() + oneWeekMs) return false;
+    if (now >= secret.createdAt.getTime() + ONE_WEEK_MS) return false;
   }
 
   const offsetMinutes = Number(secret.scheduleTimezoneOffsetMinutes) || 0;
@@ -101,7 +101,6 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'weeklyLockSchedule secrets must include iv' });
   }
   const now = Date.now();
-  const tzOffset = Number(scheduleTimezoneOffsetMinutes);
   const lockDate = hasLockAt ? new Date(lockAt) : null;
   const unlockDate = hasUnlockAt ? new Date(unlockAt) : null;
   if (lockDate && Number.isNaN(lockDate.getTime())) return res.status(400).json({ error: 'bad lockAt' });
@@ -128,7 +127,9 @@ router.post('/', async (req, res) => {
     lockAt: lockDate || undefined,
     weeklyLockSchedule: hasWeeklySchedule ? weeklyLockSchedule : undefined,
     repeatWeekly: Boolean(repeatWeekly),
-    scheduleTimezoneOffsetMinutes: Number.isFinite(tzOffset) ? tzOffset : 0,
+    scheduleTimezoneOffsetMinutes: Number.isFinite(Number(scheduleTimezoneOffsetMinutes))
+      ? Number(scheduleTimezoneOffsetMinutes)
+      : 0,
   });
   res.json({ ok: true, id: secret._id });
 });

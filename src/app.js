@@ -198,6 +198,7 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
       const startTime = e.target.weeklyStartTime.value;
       const endTime = e.target.weeklyEndTime.value;
       if (!startTime || !endTime) throw new Error('Choose both weekly lock start and end times');
+      // Start > end is intentionally allowed to represent an overnight lock window (e.g. 22:00-06:00).
       if (startTime === endTime) throw new Error('Weekly lock start and end times cannot be the same');
       const { ciphertext, iv } = await aesEncrypt(session.encKey, payload);
       body = {
@@ -206,6 +207,7 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
         iv,
         weeklyLockSchedule: selectedDays.map((dayOfWeek) => ({ dayOfWeek, startTime, endTime })),
         repeatWeekly: e.target.repeatWeekly.checked,
+        // JS getTimezoneOffset is minutes behind UTC (positive west of UTC), which the server expects.
         scheduleTimezoneOffsetMinutes: new Date().getTimezoneOffset(),
       };
     } else if (scheduleMode === 'lock') {
