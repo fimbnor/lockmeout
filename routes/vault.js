@@ -134,10 +134,12 @@ router.post('/', async (req, res) => {
     unlockAt: unlockDate || undefined,
     lockAt: lockDate || undefined,
     weeklyLockSchedule: hasWeeklySchedule ? weeklyLockSchedule : undefined,
-    repeatWeekly: Boolean(repeatWeekly),
-    scheduleTimezoneOffsetMinutes: Number.isFinite(Number(scheduleTimezoneOffsetMinutes))
-      ? Number(scheduleTimezoneOffsetMinutes)
-      : 0,
+    repeatWeekly: hasWeeklySchedule ? Boolean(repeatWeekly) : undefined,
+    scheduleTimezoneOffsetMinutes: hasWeeklySchedule
+      ? (Number.isFinite(Number(scheduleTimezoneOffsetMinutes))
+        ? Number(scheduleTimezoneOffsetMinutes)
+        : 0)
+      : undefined,
   });
   res.json({ ok: true, id: secret._id });
 });

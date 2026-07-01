@@ -305,13 +305,16 @@ const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 function formatWeeklyScheduleMeta(item) {
   const schedule = item.weeklyLockSchedule || [];
   if (!schedule.length) return '';
-  const days = [...new Set(schedule.map((entry) => entry.dayOfWeek))]
+  const validSchedule = schedule.filter((entry) => Number.isInteger(entry.dayOfWeek)
+    && entry.dayOfWeek >= 0 && entry.dayOfWeek <= 6);
+  const days = [...new Set(validSchedule.map((entry) => entry.dayOfWeek))]
     .sort((a, b) => a - b)
     .map((dayOfWeek) => WEEKDAY_LABELS[dayOfWeek])
     .join(', ');
-  const firstWindow = schedule[0];
+  const windows = [...new Set(validSchedule.map((entry) => `${entry.startTime}-${entry.endTime}`))].join(', ');
   const repeatText = item.repeatWeekly ? 'repeats weekly' : 'this week only';
-  return `${item.accessible ? 'Unlocked now' : 'Locked now'} • ${days} ${firstWindow.startTime}-${firstWindow.endTime} (${repeatText})`;
+  if (!days || !windows) return `${item.accessible ? 'Unlocked now' : 'Locked now'} • Weekly schedule (${repeatText})`;
+  return `${item.accessible ? 'Unlocked now' : 'Locked now'} • ${days} ${windows} (${repeatText})`;
 }
 
 function updatePageScrollLock() {
